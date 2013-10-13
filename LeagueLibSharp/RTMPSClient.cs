@@ -1,9 +1,11 @@
 using System;
 using System.IO;
 using System.Net;
+using System.Threading;
 using System.Net.Sockets;
-using System.Security.Cryptography.X509Certificates;
 using System.Net.Security;
+using System.Collections.Generic;
+using System.Security.Cryptography.X509Certificates;
 
 namespace LeagueRTMPSSharp
 {
@@ -21,8 +23,13 @@ namespace LeagueRTMPSSharp
 
 		public string PageUrl { get; private set; }
 
+		protected String DSId;
 		protected Random rand = new Random ();
 		protected SslStream stream;
+		protected AMF3Encoder aec = new AMF3Encoder ();
+		// TODO: Java version uses a synchronized map, so perhaps create a
+		//	dictionary subclass with a sync lock instead?
+		private Dictionary<int, TypedObject> results = new Dictionary<int, TypedObject> ();
 
 		static void Main (string[] args)
 		{
@@ -64,6 +71,34 @@ namespace LeagueRTMPSSharp
 			DoHandshake ();
 
 			var packetReader = new RTMPPacketReader (stream);
+
+			// Connect
+			var parameters = new Dictionary<String, Object> ();
+			parameters.Add ("app", App);
+			parameters.Add ("flashVer", "WIN 10,1,85,3");
+			parameters.Add ("swfUrl", SwfUrl);
+			parameters.Add ("tcUrl", "rtmps://" + Server + ":" + Port);
+			parameters.Add ("fpad", false);
+			parameters.Add ("capabilities", 239);
+			parameters.Add ("audioCodecs", 3191);
+			parameters.Add ("videoCodecs", 252);
+			parameters.Add ("videoFunction", 1);
+			parameters.Add ("pageUrl", PageUrl);
+			parameters.Add ("objectEncoding", 3);
+
+			byte[] connect = aec.EncodeConnect (parameters);
+
+			stream.Write (connect, 0, connect.Length);
+			stream.Flush ();
+
+			while (!results.ContainsKey (1)) {
+				Thread.Sleep (10);
+			}
+
+			TypedObject result = results [1];
+			DSId = result.GetTO ("data").GetString ("id");
+
+			IsConnected = true;
 		}
 
 		private bool IsValidCertificate (object sender, X509Certificate cert, X509Chain chain, SslPolicyErrors errors)
@@ -94,7 +129,6 @@ namespace LeagueRTMPSSharp
 
 			// S0
 			var S0 = stream.ReadByte ();
-			Console.WriteLine (S0);
 			if (S0 != 3) {
 				throw new Exception (String.Format ("Server returned incorrect version in handshake: {0}", S0));
 			}
