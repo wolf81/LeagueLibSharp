@@ -80,7 +80,7 @@ namespace LeagueRTMPSSharp
 			stream.WriteByte (C0);
 
 			// C1
-			var timestampC1 = CurrentTimeMillis ();
+			var timestampC1 = DateTime.Now.ToFileTimeUtc ();
 			var randC1 = new byte[1528];
 			rand.NextBytes (randC1);
 
@@ -104,13 +104,13 @@ namespace LeagueRTMPSSharp
 			stream.Read (S1, 0, 1536);
 
 			// C2
-			var timestampS1 = CurrentTimeMillis ();
+			var timestampS1 = DateTime.Now.ToFileTimeUtc ();
 			message = BitConverter.GetBytes ((int)timestampS1);
 			stream.Write (S1, 0, 4);
 			stream.Write (message);
 			stream.Write (S1, 8, 1528);
 			stream.Flush ();
-					
+
 			// S2
 			var S2 = new byte[1536];
 			stream.Read (S2, 0, 1536);
@@ -133,17 +133,6 @@ namespace LeagueRTMPSSharp
 		{
 
 		}
-
-		#region Time synchronization
-
-		private static readonly DateTime Jan1st1970 = new DateTime (1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-
-		public static long CurrentTimeMillis ()
-		{
-			return (long)(DateTime.UtcNow - Jan1st1970).TotalMilliseconds;
-		}
-
-		#endregion
 
 		private class RTMPPacketReader
 		{
