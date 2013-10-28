@@ -7,7 +7,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>{A74F368F-505B-4D25-8F7A-050D103399E0}</ProjectGuid>
     <OutputType>Exe</OutputType>
-    <RootNamespace>Test</RootNamespace>
+    <RootNamespace>LeagueRTMPSSharp</RootNamespace>
     <AssemblyName>Test</AssemblyName>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
@@ -38,6 +38,7 @@
     <Compile Include="RTMPSClient.cs" />
     <Compile Include="AMF3Encoder.cs" />
     <Compile Include="TypedObject.cs" />
+    <Compile Include="AMF3Decoder.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
 </Project>

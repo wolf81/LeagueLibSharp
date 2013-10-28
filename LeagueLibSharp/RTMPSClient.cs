@@ -27,6 +27,7 @@ namespace LeagueRTMPSSharp
 		protected Random rand = new Random ();
 		protected SslStream stream;
 		protected AMF3Encoder aec = new AMF3Encoder ();
+		protected static AMF3Decoder aed = new AMF3Decoder ();
 		// TODO: Java version uses a synchronized map, so perhaps create a
 		//	dictionary subclass with a sync lock instead?
 		private Dictionary<int, TypedObject> results = new Dictionary<int, TypedObject> ();
@@ -37,10 +38,8 @@ namespace LeagueRTMPSSharp
 
 			try {
 				client.Connect ();
-				if (client.IsConnected) {
-					Console.WriteLine ("Success");
-				} else {
-					Console.WriteLine ("Failure");
+				if (!client.IsConnected) {
+					Console.WriteLine ("Connection failed");
 				}
 			} catch (Exception ex) {
 				Console.WriteLine (ex);
@@ -62,15 +61,13 @@ namespace LeagueRTMPSSharp
 				var client = new TcpClient (Server, Port);
 				stream = new SslStream (client.GetStream (), true, IsValidCertificate);
 				stream.AuthenticateAsClient (Server);
-
-				Console.WriteLine ("canRead: {0}, canWrite: {1}", stream.CanRead, stream.CanWrite);
 			} catch (Exception ex) {
 				Console.WriteLine (ex);
 			}
 
 			DoHandshake ();
 
-			var packetReader = new RTMPPacketReader (stream);
+			StartReaderSenderThreads (stream);
 
 			// Connect
 			var parameters = new Dictionary<String, Object> ();
@@ -87,16 +84,17 @@ namespace LeagueRTMPSSharp
 			parameters.Add ("objectEncoding", 3);
 
 			byte[] connect = aec.EncodeConnect (parameters);
-
+			Console.WriteLine ("{0}", BitConverter.ToString (connect));
 			stream.Write (connect, 0, connect.Length);
 			stream.Flush ();
 
-			while (!results.ContainsKey (1)) {
-				Thread.Sleep (10);
-			}
 
-			TypedObject result = results [1];
-			DSId = result.GetTO ("data").GetString ("id");
+//			while (!results.ContainsKey (1)) {
+//				Thread.Sleep (1000);
+//			}
+//
+//			TypedObject result = results [1];
+//			DSId = result.GetTO ("data").GetString ("id");
 
 			IsConnected = true;
 		}
@@ -168,13 +166,172 @@ namespace LeagueRTMPSSharp
 
 		}
 
-		private class RTMPPacketReader
-		{
-			public SslStream Stream { get; private set; }
+		static Thread readerThread = null;
+		static Thread senderThread = null;
 
-			public RTMPPacketReader (SslStream stream)
+		public static void ReaderThread (Object str)
+		{
+			SslStream ssls = str as SslStream;
+			while (true) {
+				var message = ReadMessage (ssls);
+				if (message != null && message.Length > 0) {
+					System.Console.WriteLine ("Received: " + message);
+				}
+
+				/*
+				if (message.ToLower ().Equals ("\\quit")) {
+					ssls.Write (Encoding.UTF8.GetBytes ("\\quit<EOF>"));
+					ssls.Flush ();
+					break;
+				}
+				*/
+
+			}
+		}
+
+		public static void SenderThread (Object str)
+		{
+			SslStream ssls = str as SslStream;
+			while (true) {
+
+				/*
+				string message = Console.ReadLine ();
+				if (readerThread.IsAlive) {
+					ssls.Write (Encoding.UTF8.GetBytes (message + "<EOF>"));
+					ssls.Flush ();
+				}
+				if (message.ToLower ().Equals ("\\quit"))
+					break;
+					*/
+
+			}
+		}
+
+		public static void StartReaderSenderThreads (SslStream ssls)
+		{
+			ParameterizedThreadStart readerStarter =
+				new ParameterizedThreadStart (ReaderThread);
+			ParameterizedThreadStart senderStarter =
+				new ParameterizedThreadStart (SenderThread);
+			readerThread = new Thread (readerStarter);
+//			senderThread = new Thread (senderStarter);
+			readerThread.Start (ssls);
+//			senderThread.Start (ssls);      
+//			readerThread.Join ();
+//			senderThread.Join ();
+		}
+
+		public static string ReadMessage (SslStream stream)
+		{
+			var packets = new Dictionary<Int32, Packet> ();
+
+			int b = -1;
+			string result = null;
+		
+			while (true) {
+				byte basicHeader = (byte)stream.ReadByte ();
+
+				int channel = basicHeader & 0x2F;
+				int headerType = basicHeader & 0xC0;
+
+				int headerSize = 0;
+				if (headerType == 0x00) {
+					headerSize = 12;
+				} else if (headerType == 0x40) {
+					headerSize = 8;
+				} else if (headerType == 0x80) {
+					headerSize = 4;
+				} else if (headerType == 0xC0) {
+					headerSize = 1;
+				}
+
+				if (! packets.ContainsKey (channel)) {
+					packets.Add (channel, new Packet ());
+				} 
+				Packet p = packets [channel];
+
+				if (headerSize > 1) {
+					byte[] header = new byte[headerSize - 1];
+					for (int i = 0; i < header.Length; i++) {
+						header [i] = (byte)stream.ReadByte ();
+					}
+
+					if (headerSize >= 8) {
+						int size = 0;
+						for (int i = 3; i < 6; i++) {
+							size = size * 256 + (header [i] & 0xFF);
+						}
+						p.Size = size;
+						p.Type = header [6];
+					}
+				}
+
+				for (int i = 0; i < 128; i++) {
+					byte sb = (byte)stream.ReadByte ();
+					p.Add (sb);
+
+					if (p.IsComplete) {
+						break;
+					}
+				}
+
+				if (!p.IsComplete) {
+					continue;
+				}
+
+				packets.Remove (channel);
+
+				switch (p.Type) {
+				case 0x14:
+					Console.WriteLine ("connect");
+					break;
+				case 0x11:
+					Console.WriteLine ("invoke");
+					break;
+				case 0x06:
+					Console.WriteLine ("bandwidth");
+					break;
+				case 0x03:
+					Console.WriteLine ("ack");
+					break;
+				default:
+//					Console.WriteLine ("other type: {0:x2}", headerType);
+					break;
+				}
+
+				break;
+			}
+
+			return result;
+		}
+
+		private class Packet
+		{
+			private byte[] Buffer { get; set; }
+
+			private int Position { get; set; }
+
+			public int Type { get; set; }
+
+			private int size;
+
+			public int Size {
+				get { return size; }
+				set {
+					size = value;
+					Buffer = new byte[size];
+				}
+			}
+
+			public bool IsComplete { get { return Position == Size; } }
+
+			public Packet ()
 			{
-				this.Stream = stream;
+			}
+
+			public void Add (Byte b)
+			{
+				Buffer [Position++] = b;
 			}
 		}
 	}

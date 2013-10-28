@@ -13,7 +13,7 @@ namespace LeagueRTMPSSharp
 		{
 		}
 
-		public byte[] AddHeaders (Byte[] data)
+		public byte[] AddHeaders (byte[] data)
 		{
 			var result = new List<Byte> ();
 
@@ -39,7 +39,7 @@ namespace LeagueRTMPSSharp
 			for (int i = 0; i < data.Length; i++) {
 				result.Add (data [i]);
 				if (i % 128 == 127 && i != (data.Length - 1)) {
-					result.Add ((byte)0x03);
+					result.Add ((byte)0xC3);
 				}
 			}
 
