@@ -1,4 +1,5 @@
 using System;
+using System.Net;
 using System.Text;
 using System.Collections.Generic;
 
@@ -76,7 +77,8 @@ namespace LeagueRTMPSSharp
 			cm.Add ("correlationId", "");
 			cm.Add ("clientId", null);
 			cm.Add ("destination", "");
-			cm.Add ("messageId", RandomUID ());
+			var id = RandomUID ();
+			cm.Add ("messageId", id);
 			cm.Add ("timestamp", 0d);
 			cm.Add ("timeToLive", 0d);
 			cm.Add ("body", new TypedObject (null));
@@ -93,6 +95,8 @@ namespace LeagueRTMPSSharp
 			for (int i = 0; i < ret.Length; i++) {
 				ret [i] = result [i];
 			}
+
+			var result2 = BitConverter.ToString (ret);
 
 			ret = AddHeaders (ret);
 			ret [7] = (byte)0x14; // Change message type
@@ -207,7 +211,6 @@ namespace LeagueRTMPSSharp
 			}
 
 			ret.Add ((byte)0x02);
-
 			ret.Add ((byte)((temp.Length & 0xFF00) >> 8));
 			ret.Add ((byte)(temp.Length & 0x00FF));
 
@@ -220,7 +223,8 @@ namespace LeagueRTMPSSharp
 		{
 			ret.Add ((byte)0x00);
 
-			var temp = BitConverter.GetBytes (val);
+			var temp = BitConverter.GetBytes ((double)val);
+			Array.Reverse (temp);
 
 			foreach (byte b in temp) {
 				ret.Add (b);
@@ -235,10 +239,11 @@ namespace LeagueRTMPSSharp
 				ret.Add ((byte)(((val >> 8) & 0x7f) | 0x80));
 				ret.Add ((byte)(val & 0xff));
 			} else {
-				if (val >= 0x4000) {
+				if (val >= 0x4000) { // 16384
 					ret.Add ((byte)(((val >> 14) & 0x7f) | 0x80));
 				}
-				if (val >= 0x80) {
+				if (val >= 0x80) { // 128
+					var val3 = String.Format ("{0:X}", val); 
 					ret.Add ((byte)(((val >> 7) & 0x7f) | 0x80));
 				}
 				ret.Add ((byte)(val & 0x7f));
@@ -286,6 +291,7 @@ namespace LeagueRTMPSSharp
 			ret.Add ((byte)0x01);
 			foreach (String key in val.Keys) {
 				WriteString (ret, key);
+				Console.WriteLine ("{0}", key);
 				encode (ret, val [key]);
 			}
 			ret.Add ((byte)0x01);
@@ -295,7 +301,15 @@ namespace LeagueRTMPSSharp
 		{
 			byte[] bytes = new byte[16];
 			rand.NextBytes (bytes);
-			return BitConverter.ToString (bytes);
+
+			StringBuilder ret = new StringBuilder ();
+			for (int i = 0; i < bytes.Length; i++) {
+				if (i == 4 || i == 6 || i == 8 || i == 10)
+					ret.Append ('-');
+				ret.Append (String.Format ("{0:X2}", bytes [i]));
+			}
+
+			return ret.ToString ();
 		}
 	}
 }

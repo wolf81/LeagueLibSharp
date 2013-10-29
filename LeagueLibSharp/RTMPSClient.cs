@@ -27,7 +27,7 @@ namespace LeagueRTMPSSharp
 		protected Random rand = new Random ();
 		protected SslStream stream;
 		protected AMF3Encoder aec = new AMF3Encoder ();
-		protected static AMF3Decoder aed = new AMF3Decoder ();
+		protected static AMF3Decoder adc = new AMF3Decoder ();
 		// TODO: Java version uses a synchronized map, so perhaps create a
 		//	dictionary subclass with a sync lock instead?
 		private Dictionary<int, TypedObject> results = new Dictionary<int, TypedObject> ();
@@ -59,6 +59,7 @@ namespace LeagueRTMPSSharp
 		{
 			try {
 				var client = new TcpClient (Server, Port);
+
 				stream = new SslStream (client.GetStream (), true, IsValidCertificate);
 				stream.AuthenticateAsClient (Server);
 			} catch (Exception ex) {
@@ -173,9 +174,9 @@ namespace LeagueRTMPSSharp
 		{
 			SslStream ssls = str as SslStream;
 			while (true) {
-				var message = ReadMessage (ssls);
-				if (message != null && message.Length > 0) {
-					System.Console.WriteLine ("Received: " + message);
+				var result = ReadMessage (ssls);
+				if (result != null) {
+					Console.WriteLine ("Received: {0}", result);
 				}
 
 				/*
@@ -221,12 +222,12 @@ namespace LeagueRTMPSSharp
 //			senderThread.Join ();
 		}
 
-		public static string ReadMessage (SslStream stream)
-		{
-			var packets = new Dictionary<Int32, Packet> ();
+		private static Dictionary<Int32, Packet> packets = new Dictionary<Int32, Packet> ();
 
+		public static TypedObject ReadMessage (SslStream stream)
+		{
 			int b = -1;
-			string result = null;
+			TypedObject result = null;
 		
 			while (true) {
 				byte basicHeader = (byte)stream.ReadByte ();
@@ -263,6 +264,7 @@ namespace LeagueRTMPSSharp
 						}
 						p.Size = size;
 						p.Type = header [6];
+						Console.WriteLine ("type: {0:X2}", p.Type);
 					}
 				}
 
@@ -279,11 +281,16 @@ namespace LeagueRTMPSSharp
 					continue;
 				}
 
+				Console.WriteLine ("actual type: {0:X2}", p.Type);
+
 				packets.Remove (channel);
 
 				switch (p.Type) {
 				case 0x14:
 					Console.WriteLine ("connect");
+
+					result = adc.DecodeConnect (p.Buffer);
+
 					break;
 				case 0x11:
 					Console.WriteLine ("invoke");
@@ -307,7 +314,7 @@ namespace LeagueRTMPSSharp
 
 		private class Packet
 		{
-			private byte[] Buffer { get; set; }
+			public byte[] Buffer { get; private set; }
 
 			private int Position { get; set; }
 

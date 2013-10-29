@@ -5,7 +5,7 @@ namespace LeagueRTMPSSharp
 {
 	public class TypedObject : Dictionary<string, object>
 	{
-		public string Type { get; private set; }
+		public string Type { get; set; }
 
 		public TypedObject (string type)
 		{
@@ -20,6 +20,13 @@ namespace LeagueRTMPSSharp
 		public String GetString (String key)
 		{
 			return (String)this [key];
+		}
+
+		public static TypedObject MakeArrayCollection (Object[] data)
+		{
+			TypedObject ret = new TypedObject ("flex.messaging.io.ArrayCollection");
+			ret.Add ("array", data);
+			return ret;
 		}
 	}
 }
