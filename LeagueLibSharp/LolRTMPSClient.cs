@@ -24,10 +24,12 @@ namespace LeagueRTMPSSharp
 		private string _ipAddress = null;
 		private string _loginQueue = "https://lq.eu.lol.riotgames.com/";
 		private string _authToken = null;
+		private string _sessionToken = null;
+		private int _accountID = -1;
 
 		static void Main (string[] args)
 		{
-			var client = new LolRTMPSClient ("EUW", "1.70.FOOBAR", "wsc981", "");
+			var client = new LolRTMPSClient ("EUW", "3.13.xx", "wsc981", "");
 
 			try {
 				client.ConnectAndLogin ();
@@ -35,7 +37,10 @@ namespace LeagueRTMPSSharp
 				Console.WriteLine (ex);
 			}
 
-			client.Close ();
+			if (client.IsConnected) {
+				System.Threading.Thread.Sleep (15000);
+				client.Close ();
+			}
 		}
 
 		public LolRTMPSClient (string region, string clientVersion, string username, string password) : base()
@@ -45,13 +50,26 @@ namespace LeagueRTMPSSharp
 			this.Username = username;
 			this.Password = password;
 
-			SetConnectionInfo ("prod.na1.lol.riotgames.com", 2099, "", "app:/mod_ser.dat", null);
+			SetConnectionInfo ("prod.eu.lol.riotgames.com", 2099, "", "app:/mod_ser.dat", null);
 		}
 
 		private void ConnectAndLogin ()
 		{
-			Connect ();
-			Login ();
+			try {
+				Connect ();
+				Login ();
+			} catch (Exception ex) {
+				throw ex;
+			}
+		}
+
+		public string GetErrorMessage (TypedObject result)
+		{
+			// Works for clientVersion
+			TypedObject cause = result.GetTO ("data").GetTO ("rootCause");
+			var message = (string)cause ["message"];
+			Console.WriteLine (result);
+			return message;
 		}
 
 		private void Login ()
@@ -59,9 +77,85 @@ namespace LeagueRTMPSSharp
 			GetIPAddress ();
 			GetAuthToken ();
 
-			if (_authToken != null) {
-				System.Threading.Thread.Sleep (10000);
+			if (_authToken == null) {
+				throw new Exception ("failed to get Auth token");
 			}
+
+			TypedObject body;
+
+			// Login 1
+			body = new TypedObject ("com.riotgames.platform.login.AuthenticationCredentials");
+			body.Add ("username", Username);
+			body.Add ("password", Password);
+			body.Add ("authToken", _authToken);
+			body.Add ("clientVersion", ClientVersion);
+			body.Add ("ipAddress", _ipAddress);
+			body.Add ("locale", _locale);
+			body.Add ("domain", "lolclient.lol.riotgames.com");
+			body.Add ("operatingSystem", "LoLRTMPSClient");
+			body.Add ("securityAnswer", null);
+			body.Add ("oldPassword", null);
+			body.Add ("partnerCredentials", null);
+			int id = Invoke ("loginService", "login", new Object[] { body }, (TypedObject result) => {
+				if (result ["result"].Equals ("_error")) {
+					throw new IOException (GetErrorMessage (result));
+				}
+
+				var resultBody = result.GetTO ("data").GetTO ("body");
+				_sessionToken = (string)resultBody ["token"];
+				_accountID = resultBody.GetTO ("accountSummary").GetInt ("accountId").Value;
+
+
+				// Login 2
+				byte[] encbuff = null;
+				var val = Username.ToLower () + ":" + _sessionToken;
+				encbuff = Encoding.UTF8.GetBytes (val);
+
+				// TODO: might need to do this differently ... perhaps need to be converted to bytes instead of string?
+				body = WrapBody (Convert.ToBase64String (encbuff), "auth", 8);
+				body.Type = "flex.messaging.messages.CommandMessage";
+
+				Invoke (body, (TypedObject r2) => {
+					// Subscribe to the necessary items
+					body = WrapBody (new Object[] { new TypedObject () }, "messagingDestination", 0);
+					body.Type = "flex.messaging.messages.CommandMessage";
+					TypedObject headers = body.GetTO ("headers");
+					var key = "clientId";
+
+					return;
+
+					// bc
+					headers.Add ("DSSubtopic", "bc");
+					if (body.ContainsKey (key)) {
+						body [key] = "bc-" + _accountID;
+					} else {
+						body.Add (key, "bc-" + _accountID);
+					}
+
+					Invoke (body, (TypedObject r3) => {
+
+						// cn
+						headers ["DSSubtopic"] = "cn-" + _accountID;
+						body [key] = "cn-" + _accountID;
+
+						Invoke (body, (TypedObject r4) => {
+
+							// gn
+							headers ["DSSubtopic"] = "gn-" + _accountID;
+							body [key] = "gn-" + _accountID;
+
+							Invoke (body, (TypedObject r5) => {
+								/*
+								// Start the heartbeat
+								new HeartbeatThread ();
+
+								loggedIn = true;
+								*/
+							});
+						});
+					});
+				});
+			});
 		}
 
 		private void GetIPAddress ()
@@ -133,6 +227,7 @@ namespace LeagueRTMPSSharp
 
 			var token = json.SelectToken ("token");
 			if (token == null) {
+				// TODO: implement handling of the login queue.
 
 				/*
 				int node = result.getInt("node"); // Our login queue ID

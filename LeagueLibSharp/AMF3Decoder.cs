@@ -47,7 +47,26 @@ namespace LeagueRTMPSSharp
 
 		public TypedObject DecodeInvoke (Byte[] data)
 		{
-			return null;
+			Reset ();
+
+			_dataBuffer = data;
+			_dataPos = 0;
+
+			TypedObject result = new TypedObject ("Invoke");
+			if (_dataBuffer [0] == 0x00) {
+				_dataPos++;
+				result.Add ("version", 0x00);
+			}
+			result.Add ("result", DecodeAMF0 ());
+			result.Add ("invokeId", DecodeAMF0 ());
+			result.Add ("serviceCall", DecodeAMF0 ());
+			result.Add ("data", DecodeAMF0 ());
+
+			if (_dataPos != _dataBuffer.Length) {
+				throw new Exception ("Did not consume entire buffer: " + _dataPos + " of " + _dataBuffer.Length);
+			}
+
+			return result;
 		}
 
 		private byte ReadByte ()

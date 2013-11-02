@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 using System.Collections.Generic;
 
 namespace LeagueRTMPSSharp
@@ -7,7 +8,11 @@ namespace LeagueRTMPSSharp
 	{
 		public string Type { get; set; }
 
-		public TypedObject (string type)
+		public TypedObject () : this(null)
+		{
+		}
+
+		public TypedObject (string type) : base()
 		{
 			this.Type = type;
 		}
@@ -39,6 +44,33 @@ namespace LeagueRTMPSSharp
 				return (Int32)val;
 			} else {
 				return Convert.ToInt32 ((Double)val);
+			}
+		}
+
+		public override string ToString ()
+		{
+			if (Type == null) {
+				return base.ToString ();
+			} else if (Type.Equals ("flex.messaging.io.ArrayCollection")) {
+				StringBuilder sb = new StringBuilder ();
+				Object[] data = (Object[])this ["array"];
+
+				sb.Append ("ArrayCollection:[");
+				for (int i = 0; i < data.Length; i++) {
+					sb.Append (data [i]);
+					if (i < data.Length - 1) {
+						sb.Append (", ");
+					}
+				}
+				sb.Append (']');
+				return sb.ToString ();
+			} else {
+				StringBuilder builder = new StringBuilder (Type + ":" + base.ToString ());
+				foreach (var key in Keys) {
+					var val = this [key];
+					builder.Append ("\n\t" + key + " : " + val);
+				}
+				return builder.ToString ();
 			}
 		}
 	}

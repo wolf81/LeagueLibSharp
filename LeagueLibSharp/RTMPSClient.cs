@@ -27,13 +27,16 @@ namespace LeagueRTMPSSharp
 		public string PageUrl { get; private set; }
 
 		private static Thread _readerThread = null;
+		protected int _invokeID = 2;
 		protected String DSId = null;
 		protected Random rand = new Random ();
 		protected SslStream stream = null;
 		protected AMF3Encoder aec = new AMF3Encoder ();
 		protected AMF3Decoder adc = new AMF3Decoder ();
 		private TcpClient _client = null;
-		private static ConcurrentDictionary<int, TypedObject> results = new ConcurrentDictionary<int, TypedObject> ();
+		private ConcurrentDictionary<int, TypedObject> results = new ConcurrentDictionary<int, TypedObject> ();
+		protected ConcurrentDictionary<int, byte> pendingInvokes = new ConcurrentDictionary<int, byte> ();
+		protected ConcurrentDictionary<int, Action<TypedObject>> callbacks = new ConcurrentDictionary<int, Action<TypedObject>> ();
 
 		public void SetConnectionInfo (string server, int port, string app, string swfUrl, string pageUrl)
 		{
@@ -174,6 +177,79 @@ namespace LeagueRTMPSSharp
 			Console.WriteLine ("Disconnected");
 		}
 
+		public int Invoke (TypedObject packet)
+		{
+			int id = NextInvokeID ();
+			if (!pendingInvokes.TryAdd (id, 0x0)) {
+				Console.WriteLine ("failed to add invoke with id: " + id);
+			}
+
+			try {
+				byte[] data = aec.EncodeInvoke (id, packet);
+				stream.Write (data, 0, data.Length);
+				stream.Flush ();
+
+				return id;
+			} catch (IOException e) {
+				// Clear the pending invoke
+
+				byte result;
+				if (!pendingInvokes.TryRemove (id, out result)) {
+					Console.WriteLine ("failed to remove invoke with id: " + id);
+				}
+
+				// Rethrow
+				throw e;
+			}
+		}
+
+		public int Invoke (TypedObject packet, Action<TypedObject> callback)
+		{
+			if (!callbacks.TryAdd (_invokeID, callback)) {
+				Console.WriteLine ("failed to add callback with id" + _invokeID);
+			}
+			return Invoke (packet);
+		}
+
+		public int Invoke (string destination, object operation, object body)
+		{
+			return Invoke (WrapBody (body, destination, operation));
+		}
+
+		public int Invoke (string destination, object operation, object body, Action<TypedObject> callback)
+		{
+			if (!callbacks.TryAdd (_invokeID, callback)) {
+				Console.WriteLine ("failed to add callback with id" + _invokeID);
+			}
+			return Invoke (WrapBody (body, destination, operation));
+		}
+
+		protected TypedObject WrapBody (Object body, String destination, Object operation)
+		{
+			TypedObject headers = new TypedObject ();
+			headers.Add ("DSRequestTimeout", 60);
+			headers.Add ("DSId", DSId);
+			headers.Add ("DSEndpoint", "my-rtmps");
+
+			TypedObject ret = new TypedObject ("flex.messaging.messages.RemotingMessage");
+			ret.Add ("destination", destination);
+			ret.Add ("operation", operation);
+			ret.Add ("source", null);
+			ret.Add ("timestamp", 0);
+			ret.Add ("messageId", AMF3Encoder.RandomUID ());
+			ret.Add ("timeToLive", 0);
+			ret.Add ("clientId", null);
+			ret.Add ("headers", headers);
+			ret.Add ("body", body);
+
+			return ret;
+		}
+
+		protected int NextInvokeID ()
+		{
+			return _invokeID++;
+		}
+
 		public void StartReaderThread (SslStream ssls)
 		{
 			_readerThread = new Thread (() => {
@@ -253,6 +329,7 @@ namespace LeagueRTMPSSharp
 						break;
 					case 0x11:
 						Console.WriteLine ("invoke");
+						result = adc.DecodeInvoke (p.Buffer);
 						break;
 					case 0x06:
 						Console.WriteLine ("bandwidth");
@@ -273,6 +350,13 @@ namespace LeagueRTMPSSharp
 					int? id = result.GetInt ("invokeId");
 					if (id == null || id == 0) {
 
+					} else if (callbacks.ContainsKey (id.Value)) {
+						Action<TypedObject> callback;
+						if (callbacks.TryGetValue (id.Value, out callback)) {
+							callback (result);
+						} else {
+							Console.WriteLine ("callback with id " + id.Value + " not found");
+						}
 					} else {
 						Console.WriteLine ("adding key: {0}", id.Value);
 						results.TryAdd (id.Value, result);

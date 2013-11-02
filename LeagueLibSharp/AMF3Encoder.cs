@@ -102,6 +102,27 @@ namespace LeagueRTMPSSharp
 			return ret;		
 		}
 
+		public byte[] EncodeInvoke (int id, object data)
+		{
+			List<Byte> result = new List<Byte> ();
+
+			result.Add ((byte)0x00); // version
+			result.Add ((byte)0x05); // type?
+			WriteIntAMF0 (result, id); // invoke ID
+			result.Add ((byte)0x05); // ???
+
+			result.Add ((byte)0x11); // AMF3 object
+			encode (result, data);
+
+			byte[] ret = new byte[result.Count];
+			for (int i = 0; i < ret.Length; i++)
+				ret [i] = result [i];
+
+			ret = AddHeaders (ret);
+
+			return ret;
+		}
+
 		public byte[] encode (Object obj)
 		{
 			throw new NotImplementedException ();
@@ -194,7 +215,11 @@ namespace LeagueRTMPSSharp
 
 		private void WriteArray (List<Byte> ret, Object[] val)
 		{
-			throw new NotImplementedException ();
+			WriteInt (ret, (val.Length << 1) | 1);
+			ret.Add ((byte)0x01);
+			foreach (var obj in val) {
+				encode (ret, obj);
+			}
 		}
 
 		private void WriteStringAMF0 (List<Byte> ret, String val)
