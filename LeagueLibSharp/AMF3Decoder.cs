@@ -35,9 +35,6 @@ namespace LeagueRTMPSSharp
 			result.Add ("result", DecodeAMF0 ());
 			result.Add ("invokeId", DecodeAMF0 ());
 			result.Add ("serviceCall", DecodeAMF0 ());
-
-
-
 			result.Add ("data", DecodeAMF0 ());
 
 			if (_dataPos != _dataBuffer.Length) {
@@ -517,7 +514,7 @@ namespace LeagueRTMPSSharp
 		private Object DecodeAMF0 ()
 		{
 			int type = ReadByte ();
-			Console.WriteLine ("Type: {0:x2}", type);
+
 			switch (type) {
 			case 0x00:
 				return ReadIntAMF0 ();
@@ -528,7 +525,7 @@ namespace LeagueRTMPSSharp
 			case 0x05:
 				return null;
 			case 0x11: // AMF3
-				return Decode ();
+				return Decode ();			
 			}
 
 			var message = String.Format ("AMF0 type not supported: {0:X2}", type);

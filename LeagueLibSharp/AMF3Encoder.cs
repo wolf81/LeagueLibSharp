@@ -96,8 +96,6 @@ namespace LeagueRTMPSSharp
 				ret [i] = result [i];
 			}
 
-			var result2 = BitConverter.ToString (ret);
-
 			ret = AddHeaders (ret);
 			ret [7] = (byte)0x14; // Change message type
 
@@ -291,7 +289,6 @@ namespace LeagueRTMPSSharp
 			ret.Add ((byte)0x01);
 			foreach (String key in val.Keys) {
 				WriteString (ret, key);
-				Console.WriteLine ("{0}", key);
 				encode (ret, val [key]);
 			}
 			ret.Add ((byte)0x01);
