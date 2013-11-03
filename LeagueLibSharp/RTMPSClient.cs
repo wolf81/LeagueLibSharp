@@ -177,11 +177,18 @@ namespace LeagueRTMPSSharp
 			Console.WriteLine ("Disconnected");
 		}
 
-		public int Invoke (TypedObject packet)
+		public int Invoke (TypedObject packet, Action<TypedObject> callback)
 		{
 			int id = NextInvokeID ();
+
+			Console.WriteLine ("invoking: ", id);
+
 			if (!pendingInvokes.TryAdd (id, 0x0)) {
 				Console.WriteLine ("failed to add invoke with id: " + id);
+			}
+
+			if (!callbacks.TryAdd (id, callback)) {
+				Console.WriteLine ("failed to add callback with id" + id);
 			}
 
 			try {
@@ -203,25 +210,9 @@ namespace LeagueRTMPSSharp
 			}
 		}
 
-		public int Invoke (TypedObject packet, Action<TypedObject> callback)
-		{
-			if (!callbacks.TryAdd (_invokeID, callback)) {
-				Console.WriteLine ("failed to add callback with id" + _invokeID);
-			}
-			return Invoke (packet);
-		}
-
-		public int Invoke (string destination, object operation, object body)
-		{
-			return Invoke (WrapBody (body, destination, operation));
-		}
-
 		public int Invoke (string destination, object operation, object body, Action<TypedObject> callback)
 		{
-			if (!callbacks.TryAdd (_invokeID, callback)) {
-				Console.WriteLine ("failed to add callback with id" + _invokeID);
-			}
-			return Invoke (WrapBody (body, destination, operation));
+			return Invoke (WrapBody (body, destination, operation), callback);
 		}
 
 		protected TypedObject WrapBody (Object body, String destination, Object operation)
@@ -328,8 +319,8 @@ namespace LeagueRTMPSSharp
 						result = adc.DecodeConnect (p.Buffer);
 						break;
 					case 0x11:
-						Console.WriteLine ("invoke");
 						result = adc.DecodeInvoke (p.Buffer);
+						Console.WriteLine ("invoke, id: " + result ["invokeId"]);
 						break;
 					case 0x06:
 						Console.WriteLine ("bandwidth");

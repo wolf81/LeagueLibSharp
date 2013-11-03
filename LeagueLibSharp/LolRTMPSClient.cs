@@ -3,6 +3,9 @@ using System.IO;
 using System.Net;
 using System.Web;
 using System.Text;
+using System.Linq;
+using System.Threading;
+using System.Collections.Generic;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Net.Security;
@@ -32,13 +35,17 @@ namespace LeagueRTMPSSharp
 			var client = new LolRTMPSClient ("EUW", "3.13.xx", "wsc981", "");
 
 			try {
-				client.ConnectAndLogin ();
+				client.ConnectAndLogin (() => {
+					client.Invoke ("summonerService", "getSummonerByName", new Object[] { "wolf1981" }, (TypedObject t) => {
+						Console.WriteLine (t);
+					});
+				});
 			} catch (Exception ex) {
 				Console.WriteLine (ex);
 			}
 
 			if (client.IsConnected) {
-				System.Threading.Thread.Sleep (15000);
+				Thread.Sleep (15000);
 				client.Close ();
 			}
 		}
@@ -53,11 +60,11 @@ namespace LeagueRTMPSSharp
 			SetConnectionInfo ("prod.eu.lol.riotgames.com", 2099, "", "app:/mod_ser.dat", null);
 		}
 
-		private void ConnectAndLogin ()
+		private void ConnectAndLogin (Action finished)
 		{
 			try {
 				Connect ();
-				Login ();
+				Login (finished);
 			} catch (Exception ex) {
 				throw ex;
 			}
@@ -72,7 +79,7 @@ namespace LeagueRTMPSSharp
 			return message;
 		}
 
-		private void Login ()
+		private void Login (Action finished)
 		{
 			GetIPAddress ();
 			GetAuthToken ();
@@ -122,8 +129,6 @@ namespace LeagueRTMPSSharp
 					TypedObject headers = body.GetTO ("headers");
 					var key = "clientId";
 
-					return;
-
 					// bc
 					headers.Add ("DSSubtopic", "bc");
 					if (body.ContainsKey (key)) {
@@ -151,6 +156,7 @@ namespace LeagueRTMPSSharp
 
 								loggedIn = true;
 								*/
+								finished ();
 							});
 						});
 					});
@@ -181,6 +187,14 @@ namespace LeagueRTMPSSharp
 		public bool AcceptAllCertifications (object sender, X509Certificate certification, X509Chain chain, SslPolicyErrors sslPolicyErrors)
 		{
 			return true;
+		}
+
+		private JObject ReadURL (string url)
+		{
+			using (WebClient client = new WebClient()) {
+				var response = client.DownloadString (url);
+				return JObject.Parse (response);
+			}
 		}
 
 		private void GetAuthToken ()
@@ -229,32 +243,41 @@ namespace LeagueRTMPSSharp
 			if (token == null) {
 				// TODO: implement handling of the login queue.
 
-				/*
-				int node = result.getInt("node"); // Our login queue ID
-				String nodeStr = "" + node;
-				String champ = result.getString("champ"); // The name of our login queue
-				int rate = result.getInt("rate"); // How many tickets are processed every queue update
-				int delay = result.getInt("delay"); // How often the queue status updates
+				var node = (int)json.SelectToken ("node");
+				var champ = (string)json.SelectToken ("champ");
+				var rate = (int)json.SelectToken ("rate");
+				var delay = (int)json.SelectToken ("delay");
 
-				int id = 0;
-				int cur = 0;
-				Object[] tickers = result.getArray("tickers");
-				for (Object o : tickers)
-				{
-					TypedObject to = (TypedObject)o;
+				var id = 0;
+				var cur = 0;
+				JArray tickers = (JArray)json ["tickers"];
 
-					// Find our queue
-					int tnode = to.getInt("node");
-					if (tnode != node)
+				foreach (var o in tickers) {
+					var tnode = (int)o.SelectToken ("node");
+					if (tnode != node) {
 						continue;
+					}
 
-					id = to.getInt("id"); // Our ticket in line
-					cur = to.getInt("current"); // The current ticket being processed
+					id = (int)o.SelectToken ("id");
+					cur = (int)o.SelectToken ("current");
 					break;
 				}
 
-				// Let the user know
-				System.out.println("In login queue for " + region + ", #" + (id - cur) + " in line");
+				Console.WriteLine ("In login queue for " + Region + ", #" + (id - cur) + " in line");
+
+				while ((id - cur) > rate) {
+					Thread.Sleep (delay);
+
+					var response = ReadURL (_loginQueue + "login-queue/rest/queue/ticker/" + champ);
+					if (response == null) {
+						continue;
+					}
+
+					cur = (int)response ["nodeString"];
+					Console.WriteLine ("{0}", cur);
+				}
+
+				/*
 
 				// Request the queue status until there's only 'rate' left to go
 				while (id - cur > rate)
