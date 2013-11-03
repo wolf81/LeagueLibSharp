@@ -43,7 +43,7 @@ namespace LeagueRTMPSSharp
 				await ConnectAndLogin ();
 
 				if (IsConnected) {
-					var result = await InvokeAsync ("summonerService", "getSummonerByName", new Object[] { "wolf1981" });
+					var result = await InvokeTask ("summonerService", "getSummonerByName", new Object[] { "wolf1981" });
 					Console.WriteLine (result);
 				}
 			} catch (Exception ex) {
@@ -106,7 +106,7 @@ namespace LeagueRTMPSSharp
 			body.Add ("securityAnswer", null);
 			body.Add ("oldPassword", null);
 			body.Add ("partnerCredentials", null);
-			var result = await InvokeAsync ("loginService", "login", new Object[] { body });
+			var result = await InvokeTask ("loginService", "login", new Object[] { body });
 
 			if (result ["result"].Equals ("_error")) {
 				throw new IOException (GetErrorMessage (result));
@@ -122,7 +122,7 @@ namespace LeagueRTMPSSharp
 			encbuff = Encoding.UTF8.GetBytes (val);
 			body = WrapBody (Convert.ToBase64String (encbuff), "auth", 8);
 			body.Type = "flex.messaging.messages.CommandMessage";
-			await InvokeAsync (body);
+			await InvokeTask (body);
 
 			// Subscribe to the necessary items
 			body = WrapBody (new Object[] { new TypedObject () }, "messagingDestination", 0);
@@ -137,17 +137,17 @@ namespace LeagueRTMPSSharp
 			} else {
 				body.Add (key, "bc-" + _accountID);
 			}
-			await InvokeAsync (body);
+			await InvokeTask (body);
 
 			// cn
 			headers ["DSSubtopic"] = "cn-" + _accountID;
 			body [key] = "cn-" + _accountID;
-			await InvokeAsync (body);
+			await InvokeTask (body);
 
 			// gn
 			headers ["DSSubtopic"] = "gn-" + _accountID;
 			body [key] = "gn-" + _accountID;
-			await InvokeAsync (body);
+			await InvokeTask (body);
 
 			/*
 			// Start the heartbeat
@@ -259,7 +259,7 @@ namespace LeagueRTMPSSharp
 
 				Console.WriteLine ("In login queue for " + Region + ", #" + (id - cur) + " in line");
 
-				while ((id - cur) > rate) {
+				while (id - cur > rate) {
 					Thread.Sleep (delay);
 
 					var response = ReadURL (_loginQueue + "login-queue/rest/queue/ticker/" + champ);
@@ -271,32 +271,20 @@ namespace LeagueRTMPSSharp
 					Console.WriteLine ("{0}", cur);
 				}
 
-				/*
+				while (true) {
+					try {
+						json = ReadURL (_loginQueue + "login-queue/rest/queue/authToken/" + Username.ToLower ());
+						token = json.SelectToken ("token");
 
-				// Request the queue status until there's only 'rate' left to go
-				while (id - cur > rate)
-				{
-					sleep(delay); // Sleep until the queue updates
-					response = readURL(loginQueue + "login-queue/rest/queue/ticker/" + champ);
-					result = (TypedObject)JSON.parse(response);
-					if (result == null)
-						continue;
+						if (token != null) {
+							break;
+						}
+					} catch (Exception ex) {
+						// we'll keep trying until we get a response ...
+					}
 
-					cur = hexToInt(result.getString(nodeStr));
-					System.out.println("In login queue for " + region + ", #" + (int)Math.max(1, id - cur) + " in line");
+					Thread.Sleep (delay / 10);
 				}
-
-				// Then try getting our token repeatedly
-				response = readURL(loginQueue + "login-queue/rest/queue/authToken/" + user.toLowerCase());
-				result = (TypedObject)JSON.parse(response);
-				while (response == null || !result.containsKey("token"))
-				{
-					sleep(delay / 10);
-					response = readURL(loginQueue + "login-queue/rest/queue/authToken/" + user.toLowerCase());
-					result = (TypedObject)JSON.parse(response);
-				}
-				*/
-
 			}
 			_authToken = (string)token;
 		}
