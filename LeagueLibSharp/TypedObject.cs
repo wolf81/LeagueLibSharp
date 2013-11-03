@@ -52,7 +52,7 @@ namespace LeagueRTMPSSharp
 			if (Type == null) {
 				return base.ToString ();
 			} else if (Type.Equals ("flex.messaging.io.ArrayCollection")) {
-				StringBuilder sb = new StringBuilder ();
+				var sb = new StringBuilder ();
 				Object[] data = (Object[])this ["array"];
 
 				sb.Append ("ArrayCollection:[");
@@ -65,7 +65,7 @@ namespace LeagueRTMPSSharp
 				sb.Append (']');
 				return sb.ToString ();
 			} else {
-				StringBuilder builder = new StringBuilder (Type + ":" + base.ToString ());
+				var builder = new StringBuilder (Type + ":" + base.ToString ());
 				foreach (var key in Keys) {
 					var val = this [key];
 					builder.Append ("\n\t" + key + " : " + val);

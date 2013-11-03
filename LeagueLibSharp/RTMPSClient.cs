@@ -184,14 +184,11 @@ namespace LeagueRTMPSSharp
 
 		public Task<TypedObject> InvokeTask (TypedObject packet)
 		{
-			int id = NextInvokeID ();
-
-			Console.WriteLine ("invoking: ", id);
-
+			var id = NextInvokeID ();
 			var tcs = new TaskCompletionSource<TypedObject> (); 
 
 			try {
-				byte[] data = aec.EncodeInvoke (id, packet);
+				var data = aec.EncodeInvoke (id, packet);
 				stream.Write (data, 0, data.Length);
 				stream.Flush ();
 			} catch (Exception ex) {
@@ -280,7 +277,7 @@ namespace LeagueRTMPSSharp
 					if (! packets.ContainsKey (channel)) {
 						packets.Add (channel, new RTMPPacket ());
 					} 
-					RTMPPacket p = packets [channel];
+					var p = packets [channel];
 
 					if (headerSize > 1) {
 						byte[] header = new byte[headerSize - 1];
@@ -321,8 +318,8 @@ namespace LeagueRTMPSSharp
 						result = adc.DecodeConnect (p.Buffer);
 						break;
 					case 0x11:
+						Console.WriteLine ("invoke");
 						result = adc.DecodeInvoke (p.Buffer);
-						Console.WriteLine ("invoke, id: " + result ["invokeId"]);
 						break;
 					case 0x06:
 						Console.WriteLine ("bandwidth");

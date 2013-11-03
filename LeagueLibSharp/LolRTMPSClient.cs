@@ -76,7 +76,7 @@ namespace LeagueRTMPSSharp
 		public string GetErrorMessage (TypedObject result)
 		{
 			// Works for clientVersion
-			TypedObject cause = result.GetTO ("data").GetTO ("rootCause");
+			var cause = result.GetTO ("data").GetTO ("rootCause");
 			var message = (string)cause ["message"];
 			Console.WriteLine (result);
 			return message;
@@ -91,10 +91,8 @@ namespace LeagueRTMPSSharp
 				throw new Exception ("failed to get Auth token");
 			}
 
-			TypedObject body;
-
 			// Login 1
-			body = new TypedObject ("com.riotgames.platform.login.AuthenticationCredentials");
+			var body = new TypedObject ("com.riotgames.platform.login.AuthenticationCredentials");
 			body.Add ("username", Username);
 			body.Add ("password", Password);
 			body.Add ("authToken", _authToken);
@@ -127,7 +125,7 @@ namespace LeagueRTMPSSharp
 			// Subscribe to the necessary items
 			body = WrapBody (new Object[] { new TypedObject () }, "messagingDestination", 0);
 			body.Type = "flex.messaging.messages.CommandMessage";
-			TypedObject headers = body.GetTO ("headers");
+			var headers = body.GetTO ("headers");
 			var key = "clientId";
 
 			// bc
@@ -164,15 +162,15 @@ namespace LeagueRTMPSSharp
 			if (_ipAddress != null)
 				return;
 
-			using (WebClient client = new WebClient()) {
-				string response = client.DownloadString ("http://ll.leagueoflegends.com/services/connection_info");
+			using (var client = new WebClient()) {
+				var response = client.DownloadString ("http://ll.leagueoflegends.com/services/connection_info");
 
 				if (response == null) {
 					_ipAddress = "127.0.0.1";
 					return;
 				}
 
-				JObject json = JObject.Parse (response);
+				var json = JObject.Parse (response);
 				_ipAddress = (string)json.SelectToken ("ip_address");
 				Console.WriteLine ("{0}", _ipAddress);
 			}
@@ -185,17 +183,32 @@ namespace LeagueRTMPSSharp
 
 		private JObject ReadURL (string url)
 		{
-			using (WebClient client = new WebClient()) {
+			using (var client = new WebClient()) {
 				var response = client.DownloadString (url);
 				return JObject.Parse (response);
 			}
 		}
 
+		private int hexToInt (string hex)
+		{
+			int total = 0;
+			for (int i = 0; i < hex.Count(); i++) {
+				char c = hex [i];
+				if (c >= '0' && c <= '9') {
+					total = total * 16 + c - '0';
+				} else {
+					total = total * 16 + c - 'a' + 10;
+				}
+			}
+
+			return total;
+		}
+
 		private void GetAuthToken ()
 		{
-			string payload = String.Format ("user={0},password={1}", Username, Password);
-			string query = String.Format ("payload={0}", WebUtility.UrlEncode (payload));
-			Uri url = new Uri (_loginQueue + "login-queue/rest/queue/authenticate");
+			var payload = String.Format ("user={0},password={1}", Username, Password);
+			var query = String.Format ("payload={0}", WebUtility.UrlEncode (payload));
+			var url = new Uri (_loginQueue + "login-queue/rest/queue/authenticate");
 
 			if (_loginQueue.StartsWith ("https:")) {
 				// Need to ignore certs (or use the one retrieved by RTMPSClient?)
@@ -205,9 +218,8 @@ namespace LeagueRTMPSSharp
 			var request = (HttpWebRequest)WebRequest.Create (url);
 			request.Method = "POST";
 
-			var bytes = Encoding.UTF8.GetBytes (query);
-
 			using (var stream = request.GetRequestStream()) {
+				var bytes = Encoding.UTF8.GetBytes (query);
 				stream.Write (bytes, 0, bytes.Length);
 			}
 
@@ -215,7 +227,7 @@ namespace LeagueRTMPSSharp
 			try {
 				var response = (HttpWebResponse)request.GetResponse ();
 				using (var responseStream = response.GetResponseStream()) {
-					using (StreamReader reader =new StreamReader(response.GetResponseStream())) {
+					using (var reader = new StreamReader(response.GetResponseStream())) {
 						var text = reader.ReadToEnd ();
 						json = JObject.Parse (text);
 					}
@@ -242,7 +254,7 @@ namespace LeagueRTMPSSharp
 
 				var id = 0;
 				var cur = 0;
-				JArray tickers = (JArray)json ["tickers"];
+				var tickers = (JArray)json ["tickers"];
 
 				foreach (var o in tickers) {
 					var tnode = (int)o.SelectToken ("node");
@@ -265,23 +277,22 @@ namespace LeagueRTMPSSharp
 						continue;
 					}
 
-					cur = (int)response ["nodeString"];
-					Console.WriteLine ("{0}", cur);
+					cur = hexToInt ((string)response ["nodeString"]);
+					Console.WriteLine ("In login queue for " + Region + ", #" + (int)Math.Max (1, id - cur) + " in line");
 				}
 
-				while (true) {
+				while (token == null) {
 					try {
 						json = ReadURL (_loginQueue + "login-queue/rest/queue/authToken/" + Username.ToLower ());
 						token = json.SelectToken ("token");
-
-						if (token != null) {
-							break;
-						}
 					} catch (Exception ex) {
-						// we'll keep trying until we get a response ...
+						// we'll keep trying until we get a response - we'll silence the warning
+						ex.ToString ();
 					}
 
-					Thread.Sleep (delay / 10);
+					if (token == null) {
+						Thread.Sleep (delay / 10);
+					}
 				}
 			}
 			_authToken = (string)token;
