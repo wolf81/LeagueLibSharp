@@ -5,6 +5,7 @@ using System.Web;
 using System.Text;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -33,20 +34,22 @@ namespace LeagueRTMPSSharp
 		static void Main (string[] args)
 		{
 			var client = new LolRTMPSClient ("EUW", "3.13.xx", "wsc981", "");
+			client.Test ();
+		}
 
+		private async void Test ()
+		{
 			try {
-				client.ConnectAndLogin (() => {
-					client.Invoke ("summonerService", "getSummonerByName", new Object[] { "wolf1981" }, (TypedObject t) => {
-						Console.WriteLine (t);
-					});
-				});
+				await ConnectAndLogin ();
+
+				if (IsConnected) {
+					var result = await InvokeAsync ("summonerService", "getSummonerByName", new Object[] { "wolf1981" });
+					Console.WriteLine (result);
+				}
 			} catch (Exception ex) {
 				Console.WriteLine (ex);
-			}
-
-			if (client.IsConnected) {
-				Thread.Sleep (15000);
-				client.Close ();
+			} finally {
+				Close ();
 			}
 		}
 
@@ -60,11 +63,11 @@ namespace LeagueRTMPSSharp
 			SetConnectionInfo ("prod.eu.lol.riotgames.com", 2099, "", "app:/mod_ser.dat", null);
 		}
 
-		private void ConnectAndLogin (Action finished)
+		private async Task ConnectAndLogin ()
 		{
 			try {
 				Connect ();
-				Login (finished);
+				await Login ();
 			} catch (Exception ex) {
 				throw ex;
 			}
@@ -79,7 +82,7 @@ namespace LeagueRTMPSSharp
 			return message;
 		}
 
-		private void Login (Action finished)
+		private async Task Login ()
 		{
 			GetIPAddress ();
 			GetAuthToken ();
@@ -103,65 +106,56 @@ namespace LeagueRTMPSSharp
 			body.Add ("securityAnswer", null);
 			body.Add ("oldPassword", null);
 			body.Add ("partnerCredentials", null);
-			int id = Invoke ("loginService", "login", new Object[] { body }, (TypedObject result) => {
-				if (result ["result"].Equals ("_error")) {
-					throw new IOException (GetErrorMessage (result));
-				}
+			var result = await InvokeAsync ("loginService", "login", new Object[] { body });
 
-				var resultBody = result.GetTO ("data").GetTO ("body");
-				_sessionToken = (string)resultBody ["token"];
-				_accountID = resultBody.GetTO ("accountSummary").GetInt ("accountId").Value;
+			if (result ["result"].Equals ("_error")) {
+				throw new IOException (GetErrorMessage (result));
+			}
 
+			var resultBody = result.GetTO ("data").GetTO ("body");
+			_sessionToken = (string)resultBody ["token"];
+			_accountID = resultBody.GetTO ("accountSummary").GetInt ("accountId").Value;
 
-				// Login 2
-				byte[] encbuff = null;
-				var val = Username.ToLower () + ":" + _sessionToken;
-				encbuff = Encoding.UTF8.GetBytes (val);
+			// Login 2
+			byte[] encbuff = null;
+			var val = Username.ToLower () + ":" + _sessionToken;
+			encbuff = Encoding.UTF8.GetBytes (val);
+			body = WrapBody (Convert.ToBase64String (encbuff), "auth", 8);
+			body.Type = "flex.messaging.messages.CommandMessage";
+			await InvokeAsync (body);
 
-				// TODO: might need to do this differently ... perhaps need to be converted to bytes instead of string?
-				body = WrapBody (Convert.ToBase64String (encbuff), "auth", 8);
-				body.Type = "flex.messaging.messages.CommandMessage";
+			// Subscribe to the necessary items
+			body = WrapBody (new Object[] { new TypedObject () }, "messagingDestination", 0);
+			body.Type = "flex.messaging.messages.CommandMessage";
+			TypedObject headers = body.GetTO ("headers");
+			var key = "clientId";
 
-				Invoke (body, (TypedObject r2) => {
-					// Subscribe to the necessary items
-					body = WrapBody (new Object[] { new TypedObject () }, "messagingDestination", 0);
-					body.Type = "flex.messaging.messages.CommandMessage";
-					TypedObject headers = body.GetTO ("headers");
-					var key = "clientId";
+			// bc
+			headers.Add ("DSSubtopic", "bc");
+			if (body.ContainsKey (key)) {
+				body [key] = "bc-" + _accountID;
+			} else {
+				body.Add (key, "bc-" + _accountID);
+			}
+			await InvokeAsync (body);
 
-					// bc
-					headers.Add ("DSSubtopic", "bc");
-					if (body.ContainsKey (key)) {
-						body [key] = "bc-" + _accountID;
-					} else {
-						body.Add (key, "bc-" + _accountID);
-					}
+			// cn
+			headers ["DSSubtopic"] = "cn-" + _accountID;
+			body [key] = "cn-" + _accountID;
+			await InvokeAsync (body);
 
-					Invoke (body, (TypedObject r3) => {
+			// gn
+			headers ["DSSubtopic"] = "gn-" + _accountID;
+			body [key] = "gn-" + _accountID;
+			await InvokeAsync (body);
 
-						// cn
-						headers ["DSSubtopic"] = "cn-" + _accountID;
-						body [key] = "cn-" + _accountID;
+			/*
+			// Start the heartbeat
+			new HeartbeatThread ();
 
-						Invoke (body, (TypedObject r4) => {
+			loggedIn = true;
+			 */
 
-							// gn
-							headers ["DSSubtopic"] = "gn-" + _accountID;
-							body [key] = "gn-" + _accountID;
-
-							Invoke (body, (TypedObject r5) => {
-								/*
-								// Start the heartbeat
-								new HeartbeatThread ();
-
-								loggedIn = true;
-								*/
-								finished ();
-							});
-						});
-					});
-				});
-			});
 		}
 
 		private void GetIPAddress ()

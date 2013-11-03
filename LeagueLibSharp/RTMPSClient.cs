@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Net;
+using System.Threading.Tasks;
 using System.Threading;
 using System.Net.Sockets;
 using System.Net.Security;
@@ -35,8 +36,7 @@ namespace LeagueRTMPSSharp
 		protected AMF3Decoder adc = new AMF3Decoder ();
 		private TcpClient _client = null;
 		private ConcurrentDictionary<int, TypedObject> results = new ConcurrentDictionary<int, TypedObject> ();
-		protected ConcurrentDictionary<int, byte> pendingInvokes = new ConcurrentDictionary<int, byte> ();
-		protected ConcurrentDictionary<int, Action<TypedObject>> callbacks = new ConcurrentDictionary<int, Action<TypedObject>> ();
+		protected ConcurrentDictionary<int, TaskCompletionSource<TypedObject>> pendingInvokes = new ConcurrentDictionary<int, TaskCompletionSource<TypedObject>> ();
 
 		public void SetConnectionInfo (string server, int port, string app, string swfUrl, string pageUrl)
 		{
@@ -177,42 +177,34 @@ namespace LeagueRTMPSSharp
 			Console.WriteLine ("Disconnected");
 		}
 
-		public int Invoke (TypedObject packet, Action<TypedObject> callback)
+		public Task<TypedObject> InvokeAsync (TypedObject packet)
 		{
 			int id = NextInvokeID ();
 
 			Console.WriteLine ("invoking: ", id);
 
-			if (!pendingInvokes.TryAdd (id, 0x0)) {
-				Console.WriteLine ("failed to add invoke with id: " + id);
-			}
-
-			if (!callbacks.TryAdd (id, callback)) {
-				Console.WriteLine ("failed to add callback with id" + id);
-			}
+			var tcs = new TaskCompletionSource<TypedObject> (); 
 
 			try {
 				byte[] data = aec.EncodeInvoke (id, packet);
 				stream.Write (data, 0, data.Length);
 				stream.Flush ();
-
-				return id;
-			} catch (IOException e) {
-				// Clear the pending invoke
-
-				byte result;
-				if (!pendingInvokes.TryRemove (id, out result)) {
-					Console.WriteLine ("failed to remove invoke with id: " + id);
-				}
-
-				// Rethrow
-				throw e;
+			} catch (Exception ex) {
+				tcs.SetException (ex);	
 			}
+
+			// if we did succesfully start request, we can add the pendingInvoke to handle result
+			if (!pendingInvokes.TryAdd (id, tcs)) {
+				Console.WriteLine ("failed to add invoke with id: " + id);
+			}
+
+			return tcs.Task;
 		}
 
-		public int Invoke (string destination, object operation, object body, Action<TypedObject> callback)
+		public Task<TypedObject> InvokeAsync (string destination, object operation, object body)
 		{
-			return Invoke (WrapBody (body, destination, operation), callback);
+			var to = WrapBody (body, destination, operation);
+			return InvokeAsync (to);
 		}
 
 		protected TypedObject WrapBody (Object body, String destination, Object operation)
@@ -341,10 +333,10 @@ namespace LeagueRTMPSSharp
 					int? id = result.GetInt ("invokeId");
 					if (id == null || id == 0) {
 
-					} else if (callbacks.ContainsKey (id.Value)) {
-						Action<TypedObject> callback;
-						if (callbacks.TryGetValue (id.Value, out callback)) {
-							callback (result);
+					} else if (pendingInvokes.ContainsKey (id.Value)) {
+						TaskCompletionSource<TypedObject> tcs;
+						if (pendingInvokes.TryGetValue (id.Value, out tcs)) {
+							tcs.SetResult (result);
 						} else {
 							Console.WriteLine ("callback with id " + id.Value + " not found");
 						}
