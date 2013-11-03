@@ -177,6 +177,11 @@ namespace LeagueRTMPSSharp
 			Console.WriteLine ("Disconnected");
 		}
 
+		public TypedObject Invoke (TypedObject packet)
+		{
+			return InvokeTask (packet).Result;
+		}
+
 		public Task<TypedObject> InvokeTask (TypedObject packet)
 		{
 			int id = NextInvokeID ();
@@ -199,6 +204,11 @@ namespace LeagueRTMPSSharp
 			}
 
 			return tcs.Task;
+		}
+
+		public TypedObject Invoke (string destination, object operation, object body)
+		{
+			return InvokeTask (destination, operation, body).Result;
 		}
 
 		public Task<TypedObject> InvokeTask (string destination, object operation, object body)

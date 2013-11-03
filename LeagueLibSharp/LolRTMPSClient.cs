@@ -37,13 +37,13 @@ namespace LeagueRTMPSSharp
 			client.Test ();
 		}
 
-		private async void Test ()
+		private void Test ()
 		{
 			try {
-				await ConnectAndLogin ();
+				ConnectAndLogin ();
 
 				if (IsConnected) {
-					var result = await InvokeTask ("summonerService", "getSummonerByName", new Object[] { "wolf1981" });
+					var result = Invoke ("summonerService", "getSummonerByName", new Object[] { "wolf1981" });
 					Console.WriteLine (result);
 				}
 			} catch (Exception ex) {
@@ -63,11 +63,11 @@ namespace LeagueRTMPSSharp
 			SetConnectionInfo ("prod.eu.lol.riotgames.com", 2099, "", "app:/mod_ser.dat", null);
 		}
 
-		private async Task ConnectAndLogin ()
+		private void ConnectAndLogin ()
 		{
 			try {
 				Connect ();
-				await Login ();
+				Login ();
 			} catch (Exception ex) {
 				throw ex;
 			}
@@ -82,7 +82,7 @@ namespace LeagueRTMPSSharp
 			return message;
 		}
 
-		private async Task Login ()
+		private void Login ()
 		{
 			GetIPAddress ();
 			GetAuthToken ();
@@ -106,7 +106,7 @@ namespace LeagueRTMPSSharp
 			body.Add ("securityAnswer", null);
 			body.Add ("oldPassword", null);
 			body.Add ("partnerCredentials", null);
-			var result = await InvokeTask ("loginService", "login", new Object[] { body });
+			var result = Invoke ("loginService", "login", new Object[] { body });
 
 			if (result ["result"].Equals ("_error")) {
 				throw new IOException (GetErrorMessage (result));
@@ -122,7 +122,7 @@ namespace LeagueRTMPSSharp
 			encbuff = Encoding.UTF8.GetBytes (val);
 			body = WrapBody (Convert.ToBase64String (encbuff), "auth", 8);
 			body.Type = "flex.messaging.messages.CommandMessage";
-			await InvokeTask (body);
+			Invoke (body);
 
 			// Subscribe to the necessary items
 			body = WrapBody (new Object[] { new TypedObject () }, "messagingDestination", 0);
@@ -137,17 +137,17 @@ namespace LeagueRTMPSSharp
 			} else {
 				body.Add (key, "bc-" + _accountID);
 			}
-			await InvokeTask (body);
+			Invoke (body);
 
 			// cn
 			headers ["DSSubtopic"] = "cn-" + _accountID;
 			body [key] = "cn-" + _accountID;
-			await InvokeTask (body);
+			Invoke (body);
 
 			// gn
 			headers ["DSSubtopic"] = "gn-" + _accountID;
 			body [key] = "gn-" + _accountID;
-			await InvokeTask (body);
+			Invoke (body);
 
 			/*
 			// Start the heartbeat
@@ -235,8 +235,6 @@ namespace LeagueRTMPSSharp
 
 			var token = json.SelectToken ("token");
 			if (token == null) {
-				// TODO: implement handling of the login queue.
-
 				var node = (int)json.SelectToken ("node");
 				var champ = (string)json.SelectToken ("champ");
 				var rate = (int)json.SelectToken ("rate");
