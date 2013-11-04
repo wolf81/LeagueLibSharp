@@ -1,3 +1,19 @@
+// /*
+//  * Copyright (c) 2013 Wolfgang Schreurs <wolfgang.schreurs@gmail.com>
+//  *
+//  * Permission to use, copy, modify, and distribute this software for any
+//  * purpose with or without fee is hereby granted, provided that the above
+//  * copyright notice and this permission notice appear in all copies.
+//  *
+//  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+//  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+//  * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+//  * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+//  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+//  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+//  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+//  */
+//
 using System;
 using System.IO;
 using System.Net;
@@ -216,12 +232,12 @@ namespace LeagueRTMPSSharp
 
 		protected TypedObject WrapBody (Object body, String destination, Object operation)
 		{
-			TypedObject headers = new TypedObject ();
+			var headers = new TypedObject ();
 			headers.Add ("DSRequestTimeout", 60);
 			headers.Add ("DSId", DSId);
 			headers.Add ("DSEndpoint", "my-rtmps");
 
-			TypedObject ret = new TypedObject ("flex.messaging.messages.RemotingMessage");
+			var ret = new TypedObject ("flex.messaging.messages.RemotingMessage");
 			ret.Add ("destination", destination);
 			ret.Add ("operation", operation);
 			ret.Add ("source", null);
