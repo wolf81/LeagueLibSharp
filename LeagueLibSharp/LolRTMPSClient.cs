@@ -32,6 +32,13 @@ namespace LeagueRTMPSSharp
 {
 	public class LolRTMPSClient : RTMPSClient
 	{
+		private int _accountID = -1;
+		private string _locale = "en_US";
+		private string _ipAddress = null;
+		private string _loginQueue = null;
+		private string _authToken = null;
+		private string _sessionToken = null;
+
 		public string Region { get; private set; }
 
 		public string ClientVersion { get; private set; }
@@ -39,13 +46,6 @@ namespace LeagueRTMPSSharp
 		public string Username { get; private set; }
 
 		public string Password { get; private set; }
-
-		private string _locale = "en_US";
-		private string _ipAddress = null;
-		private string _loginQueue = "https://lq.eu.lol.riotgames.com/";
-		private string _authToken = null;
-		private string _sessionToken = null;
-		private int _accountID = -1;
 
 		static void Main (string[] args)
 		{
@@ -59,7 +59,7 @@ namespace LeagueRTMPSSharp
 				ConnectAndLogin ();
 
 				if (IsConnected) {
-					var result = Invoke ("summonerService", "getSummonerByName", new Object[] { "ch0pst1ck" });
+					var result = Invoke ("summonerService", "getSummonerByName", new Object[] { "feedstick" });
 					Console.WriteLine (result);
 				}
 			} catch (Exception ex) {
@@ -71,12 +71,49 @@ namespace LeagueRTMPSSharp
 
 		public LolRTMPSClient (string region, string clientVersion, string username, string password) : base()
 		{
-			this.Region = region.ToUpper ();
 			this.ClientVersion = clientVersion;
+			this.Region = region.ToUpper ();
 			this.Username = username;
 			this.Password = password;
 
-			SetConnectionInfo ("prod.eu.lol.riotgames.com", 2099, "", "app:/mod_ser.dat", null);
+			string server = null;
+			if (region.Equals ("NA")) {
+				server = "prod.na1.lol.riotgames.com";
+				_loginQueue = "https://lq.na1.lol.riotgames.com/";
+			} else if (region.Equals ("EUW")) {
+				server = "prod.eu.lol.riotgames.com";
+				_loginQueue = "https://lq.eu.lol.riotgames.com/";
+			} else if (region.Equals ("EUN") || region.Equals ("EUNE")) {
+				server = "prod.eun1.lol.riotgames.com";
+				_loginQueue = "https://lq.eun1.lol.riotgames.com/";
+			} else if (region.Equals ("KR")) {
+				server = "prod.kr.lol.riotgames.com";
+				_loginQueue = "https://lq.kr.lol.riotgames.com/";
+			} else if (region.Equals ("BR")) {
+				server = "prod.br.lol.riotgames.com";
+				_loginQueue = "https://lq.br.lol.riotgames.com/";
+			} else if (region.Equals ("LAN")) {
+				server = "prod.la1.lol.riotgames.com";
+				_loginQueue = "https://lq.la1.lol.riotgames.com/";
+			} else if (region.Equals ("LAS")) {
+				server = "prod.la2.lol.riotgames.com";
+				_loginQueue = "https://lq.la2.lol.riotgames.com/";
+			} else if (region.Equals ("OCE")) {
+				server = "prod.oc1.lol.riotgames.com";
+				_loginQueue = "https://lq.oc1.lol.riotgames.com/";
+			} else if (region.Equals ("TR")) {
+				server = "prod.tr.lol.riotgames.com";
+				_loginQueue = "https://lq.tr.lol.riotgames.com/";
+			} else if (region.Equals ("PBE")) {
+				server = "prod.pbe1.lol.riotgames.com";
+				_loginQueue = "https://lq.pbe1.lol.riotgames.com/";
+			} else {
+				Console.WriteLine ("Invalid region: " + region);
+				Console.WriteLine ("Valid regions are: NA, EUW, EUN/EUNE, KR, BR, LAN, LAS, OCE, TR, PBE");
+				return;
+			}
+
+			SetConnectionInfo (server, 2099, "", "app:/mod_ser.dat", null);
 		}
 
 		private void ConnectAndLogin ()
@@ -263,6 +300,16 @@ namespace LeagueRTMPSSharp
 
 			var token = json.SelectToken ("token");
 			if (token == null) {
+				/* TODO: These results cause a crash, need to handle this:
+					{
+					  "rate": 0,
+					  "reason": "OpeningSite",
+					  "status": "BUSY",
+					  "delay": 5000
+					}
+				 */
+
+				Console.WriteLine (json);
 				var node = (int)json.SelectToken ("node");
 				var champ = (string)json.SelectToken ("champ");
 				var rate = (int)json.SelectToken ("rate");
@@ -293,7 +340,7 @@ namespace LeagueRTMPSSharp
 						continue;
 					}
 
-					cur = hexToInt ((string)response ["nodeString"]);
+					cur = hexToInt ((string)response [String.Format ("{0}", node)]);
 					Console.WriteLine ("In login queue for " + Region + ", #" + (int)Math.Max (1, id - cur) + " in line");
 				}
 

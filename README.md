@@ -19,3 +19,4 @@ TODO
 * Implement heartbeat thread.
 * Implement methods to automatically reconnect whenever connection is broken.
 * Create an app project for test purposes, library project for real-world use.
+* Change the LoLRTMPSClient / RTMPSClient into a state machine, seems the most logical pattern for this class.
