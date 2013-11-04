@@ -15,24 +15,31 @@
 //  */
 //
 using System;
-using System.Collections.Generic;
 
 namespace LeagueRTMPSSharp
 {
-	internal class ClassDefinition
+	internal class RTMPPacket
 	{
-		public string Type { get; set; }
+		private int _size;
+		private int _position;
 
-		public bool Externalizable { get; set; }
+		public byte[] Buffer { get; private set; }
 
-		public bool Dynamic { get; set; }
+		public int Type { get; set; }
 
-		public List<string> Members = new List<string> ();
+		public int Size {
+			get { return _size; }
+			set {
+				_size = value;
+				Buffer = new byte[_size];
+			}
+		}
 
-		public ClassDefinition ()
+		public bool IsComplete { get { return _position == Size; } }
+
+		public void Add (byte b)
 		{
-			Dynamic = false;
-			Externalizable = false;
+			Buffer [_position++] = b;
 		}
 	}
 }

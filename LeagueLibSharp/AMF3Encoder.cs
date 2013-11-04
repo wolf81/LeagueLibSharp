@@ -21,7 +21,7 @@ using System.Collections.Generic;
 
 namespace LeagueRTMPSSharp
 {
-	public class AMF3Encoder
+	internal class AMF3Encoder
 	{
 		private static Random rand = new Random ();
 		private long startTime = System.DateTime.Now.ToFileTime ();

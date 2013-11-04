@@ -21,7 +21,7 @@ using Newtonsoft.Json;
 
 namespace LeagueRTMPSSharp
 {
-	public class AMF3Decoder
+	internal class AMF3Decoder
 	{
 		private int _dataPos = 0;
 		private byte[] _dataBuffer = null;

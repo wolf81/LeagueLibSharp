@@ -10,3 +10,12 @@ Be warned: the code is still very much a work-in-progress and contains much debu
 [0]: http://code.google.com/p/lolrtmpsclient/
 [1]: http://www.lolking.net
 [2]: http://www.lolnexus.com
+
+TODO
+----
+
+* Add convenience methods for several API calls, preferably using async / await.
+* Use a ThreadPool for the all threads (RTMPS client classes).
+* Implement heartbeat thread.
+* Implement methods to automatically reconnect whenever connection is broken.
+* Create an app project for test purposes, library project for real-world use.

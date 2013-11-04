@@ -29,9 +29,21 @@ namespace LeagueRTMPSSharp
 {
 	public class RTMPSClient
 	{
-		public  bool IsConnected { get; private set; }
+		private int _invokeID = 2;
+		private String _DSId = null;
+		private Random _rand = new Random ();
+		private TcpClient _client = null;
+		private SslStream _stream = null;
+		private Thread _readerThread = null;
+		private AMF3Encoder _aec = new AMF3Encoder ();
+		private AMF3Decoder _adc = new AMF3Decoder ();
+		private Dictionary<int, RTMPPacket> _packets = new Dictionary<int, RTMPPacket> ();
+		private ConcurrentDictionary<int, TypedObject> _results = new ConcurrentDictionary<int, TypedObject> ();
+		private ConcurrentDictionary<int, TaskCompletionSource<TypedObject>> _pendingInvokes = new ConcurrentDictionary<int, TaskCompletionSource<TypedObject>> ();
 
-		public  bool IsReconnecting { get; private set; }
+		public bool IsConnected { get; private set; }
+
+		public bool IsReconnecting { get; private set; }
 
 		public string Server { get; private set; }
 
@@ -42,17 +54,6 @@ namespace LeagueRTMPSSharp
 		public string SwfUrl { get; private set; }
 
 		public string PageUrl { get; private set; }
-
-		private static Thread _readerThread = null;
-		protected int _invokeID = 2;
-		protected String DSId = null;
-		protected Random rand = new Random ();
-		protected SslStream stream = null;
-		protected AMF3Encoder aec = new AMF3Encoder ();
-		protected AMF3Decoder adc = new AMF3Decoder ();
-		private TcpClient _client = null;
-		private ConcurrentDictionary<int, TypedObject> results = new ConcurrentDictionary<int, TypedObject> ();
-		protected ConcurrentDictionary<int, TaskCompletionSource<TypedObject>> pendingInvokes = new ConcurrentDictionary<int, TaskCompletionSource<TypedObject>> ();
 
 		public void SetConnectionInfo (string server, int port, string app, string swfUrl, string pageUrl)
 		{
@@ -67,18 +68,18 @@ namespace LeagueRTMPSSharp
 		{
 			try {
 				_client = new TcpClient (Server, Port);
-				stream = new SslStream (_client.GetStream (), true, IsValidCertificate);
-				stream.AuthenticateAsClient (Server);
+				_stream = new SslStream (_client.GetStream (), true, IsValidCertificate);
+				_stream.AuthenticateAsClient (Server);
 			} catch (Exception ex) {
 				Console.WriteLine (ex);
 			}
 
 			DoHandshake ();
 
-			StartReaderThread (stream);
+			StartReaderThread (_stream);
 
 			// Connect
-			var parameters = new Dictionary<String, Object> ();
+			var parameters = new Dictionary<string, object> ();
 			parameters.Add ("app", App);
 			parameters.Add ("flashVer", "WIN 10,1,85,3");
 			parameters.Add ("swfUrl", SwfUrl);
@@ -91,24 +92,32 @@ namespace LeagueRTMPSSharp
 			parameters.Add ("pageUrl", PageUrl);
 			parameters.Add ("objectEncoding", 3);
 
-			byte[] connect = aec.EncodeConnect (parameters);
-			stream.Write (connect, 0, connect.Length);
-			stream.Flush ();
-
-			TypedObject result = null;
-			while (true) {
-				results.TryGetValue (1, out result);
-				if (result != null) { 
-					break;
-				}
-
-				Thread.Sleep (100);
-			}
-
-			DSId = result.GetTO ("data").GetString ("id");
+			var result = ConnectTask (parameters).Result;
+			_DSId = result.GetTO ("data").GetString ("id");
 
 			IsConnected = true;
 			Console.WriteLine ("Connected");
+		}
+
+		private Task<TypedObject> ConnectTask (Dictionary <string, object> parameters)
+		{
+			var id = 1;
+			var tcs = new TaskCompletionSource<TypedObject> (); 
+
+			if (!_pendingInvokes.TryAdd (id, tcs)) {
+				Console.WriteLine ("failed to add invoke with id: " + id);
+			}
+
+			try {
+				var data = _aec.EncodeConnect (parameters);
+				_stream.Write (data, 0, data.Length);
+				_stream.Flush ();
+			} catch (Exception ex) {
+				_pendingInvokes.TryRemove (id, out tcs);
+				tcs.SetException (ex);	
+			}
+
+			return tcs.Task;
 		}
 
 		private bool IsValidCertificate (object sender, X509Certificate cert, X509Chain chain, SslPolicyErrors errors)
@@ -122,42 +131,42 @@ namespace LeagueRTMPSSharp
 
 			// C0
 			byte C0 = 0x03;
-			stream.WriteByte (C0);
+			_stream.WriteByte (C0);
 
 			// C1
 			var timestampC1 = DateTime.Now.ToFileTimeUtc ();
 			var randC1 = new byte[1528];
-			rand.NextBytes (randC1);
+			_rand.NextBytes (randC1);
 
 			message = BitConverter.GetBytes ((int)timestampC1);
-			stream.Write (message);
+			_stream.Write (message);
 
 			message = BitConverter.GetBytes (0);
-			stream.Write (message);
-			stream.Write (randC1, 0, randC1.Length);
-			stream.Flush ();
+			_stream.Write (message);
+			_stream.Write (randC1, 0, randC1.Length);
+			_stream.Flush ();
 
 			// S0
-			var S0 = stream.ReadByte ();
+			var S0 = _stream.ReadByte ();
 			if (S0 != 3) {
-				throw new Exception (String.Format ("Server returned incorrect version in handshake: {0}", S0));
+				throw new Exception ("Server returned incorrect version in handshake: " + S0);
 			}
 
 			// S1
 			var S1 = new byte[1536];
-			stream.Read (S1, 0, 1536);
+			_stream.Read (S1, 0, 1536);
 
 			// C2
 			var timestampS1 = DateTime.Now.ToFileTimeUtc ();
 			message = BitConverter.GetBytes ((int)timestampS1);
-			stream.Write (S1, 0, 4);
-			stream.Write (message);
-			stream.Write (S1, 8, 1528);
-			stream.Flush ();
+			_stream.Write (S1, 0, 4);
+			_stream.Write (message);
+			_stream.Write (S1, 8, 1528);
+			_stream.Flush ();
 
 			// S2
 			var S2 = new byte[1536];
-			stream.Read (S2, 0, 1536);
+			_stream.Read (S2, 0, 1536);
 
 			// Validate handshake
 			var valid = true;
@@ -203,17 +212,17 @@ namespace LeagueRTMPSSharp
 			var id = NextInvokeID ();
 			var tcs = new TaskCompletionSource<TypedObject> (); 
 
-			try {
-				var data = aec.EncodeInvoke (id, packet);
-				stream.Write (data, 0, data.Length);
-				stream.Flush ();
-			} catch (Exception ex) {
-				tcs.SetException (ex);	
+			if (!_pendingInvokes.TryAdd (id, tcs)) {
+				Console.WriteLine ("failed to add invoke with id: " + id);
 			}
 
-			// if we did succesfully start request, we can add the pendingInvoke to handle result
-			if (!pendingInvokes.TryAdd (id, tcs)) {
-				Console.WriteLine ("failed to add invoke with id: " + id);
+			try {
+				var data = _aec.EncodeInvoke (id, packet);
+				_stream.Write (data, 0, data.Length);
+				_stream.Flush ();
+			} catch (Exception ex) {
+				_pendingInvokes.TryRemove (id, out tcs);
+				tcs.SetException (ex);	
 			}
 
 			return tcs.Task;
@@ -230,11 +239,11 @@ namespace LeagueRTMPSSharp
 			return InvokeTask (to);
 		}
 
-		protected TypedObject WrapBody (Object body, String destination, Object operation)
+		protected TypedObject WrapBody (object body, string destination, object operation)
 		{
 			var headers = new TypedObject ();
 			headers.Add ("DSRequestTimeout", 60);
-			headers.Add ("DSId", DSId);
+			headers.Add ("DSId", _DSId);
 			headers.Add ("DSEndpoint", "my-rtmps");
 
 			var ret = new TypedObject ("flex.messaging.messages.RemotingMessage");
@@ -268,8 +277,6 @@ namespace LeagueRTMPSSharp
 			_readerThread.Start (ssls);
 		}
 
-		private static Dictionary<Int32, RTMPPacket> packets = new Dictionary<Int32, RTMPPacket> ();
-
 		public void ReadMessage (SslStream stream)
 		{	
 			try {
@@ -290,13 +297,13 @@ namespace LeagueRTMPSSharp
 						headerSize = 1;
 					}
 
-					if (! packets.ContainsKey (channel)) {
-						packets.Add (channel, new RTMPPacket ());
+					if (! _packets.ContainsKey (channel)) {
+						_packets.Add (channel, new RTMPPacket ());
 					} 
-					var p = packets [channel];
+					var p = _packets [channel];
 
 					if (headerSize > 1) {
-						byte[] header = new byte[headerSize - 1];
+						var header = new byte[headerSize - 1];
 						for (int i = 0; i < header.Length; i++) {
 							header [i] = (byte)stream.ReadByte ();
 						}
@@ -312,7 +319,7 @@ namespace LeagueRTMPSSharp
 					}
 
 					for (int i = 0; i < 128; i++) {
-						byte sb = (byte)stream.ReadByte ();
+						var sb = (byte)stream.ReadByte ();
 						p.Add (sb);
 
 						if (p.IsComplete) {
@@ -324,18 +331,18 @@ namespace LeagueRTMPSSharp
 						continue;
 					}
 
-					packets.Remove (channel);
+					_packets.Remove (channel);
 
 					TypedObject result = null;
 
 					switch (p.Type) {
 					case 0x14:
 						Console.WriteLine ("connect");
-						result = adc.DecodeConnect (p.Buffer);
+						result = _adc.DecodeConnect (p.Buffer);
 						break;
 					case 0x11:
 						Console.WriteLine ("invoke");
-						result = adc.DecodeInvoke (p.Buffer);
+						result = _adc.DecodeInvoke (p.Buffer);
 						break;
 					case 0x06:
 						Console.WriteLine ("bandwidth");
@@ -353,19 +360,20 @@ namespace LeagueRTMPSSharp
 					}
 
 					// Store result
-					int? id = result.GetInt ("invokeId");
+					var id = result.GetInt ("invokeId");
+					Console.WriteLine ("finished " + id.Value);
 					if (id == null || id == 0) {
-
-					} else if (pendingInvokes.ContainsKey (id.Value)) {
+						// don't do anything ...
+					} else if (_pendingInvokes.ContainsKey (id.Value)) {
 						TaskCompletionSource<TypedObject> tcs;
-						if (pendingInvokes.TryGetValue (id.Value, out tcs)) {
+						if (_pendingInvokes.TryRemove (id.Value, out tcs)) {
 							tcs.SetResult (result);
 						} else {
 							Console.WriteLine ("callback with id " + id.Value + " not found");
 						}
 					} else {
 						Console.WriteLine ("adding key: {0}", id.Value);
-						results.TryAdd (id.Value, result);
+						_results.TryAdd (id.Value, result);
 					}
 				}				
 			} catch (IOException ex) {
@@ -381,31 +389,6 @@ namespace LeagueRTMPSSharp
 
 			if (!IsReconnecting && IsConnected) {
 				DoReconnect ();
-			}
-		}
-
-		private class RTMPPacket
-		{
-			public byte[] Buffer { get; private set; }
-
-			public int Type { get; set; }
-
-			public int Size {
-				get { return _size; }
-				set {
-					_size = value;
-					Buffer = new byte[_size];
-				}
-			}
-
-			private int _size;
-			private int _position;
-
-			public bool IsComplete { get { return _position == Size; } }
-
-			public void Add (Byte b)
-			{
-				Buffer [_position++] = b;
 			}
 		}
 	}
