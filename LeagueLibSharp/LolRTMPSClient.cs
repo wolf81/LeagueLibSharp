@@ -59,7 +59,7 @@ namespace LeagueRTMPSSharp
 				ConnectAndLogin ();
 
 				if (IsConnected) {
-					var result = Invoke ("summonerService", "getSummonerByName", new Object[] { "wolf1981" });
+					var result = Invoke ("summonerService", "getSummonerByName", new Object[] { "ch0pst1ck" });
 					Console.WriteLine (result);
 				}
 			} catch (Exception ex) {

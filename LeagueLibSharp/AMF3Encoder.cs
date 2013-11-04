@@ -26,17 +26,13 @@ namespace LeagueRTMPSSharp
 		private static Random rand = new Random ();
 		private long startTime = System.DateTime.Now.ToFileTime ();
 
-		public AMF3Encoder ()
-		{
-		}
-
 		public byte[] AddHeaders (byte[] data)
 		{
-			var result = new List<Byte> ();
+			var result = new List<byte> ();
 
 			result.Add ((byte)0x03);
 
-			long timeDiff = System.DateTime.Now.ToFileTime () - startTime;
+			var timeDiff = System.DateTime.Now.ToFileTime () - startTime;
 			result.Add ((byte)((timeDiff & 0xFF0000) >> 16));
 			result.Add ((byte)((timeDiff & 0x00FF00) >> 8));
 			result.Add ((byte)(timeDiff & 0x0000FF));
@@ -60,7 +56,7 @@ namespace LeagueRTMPSSharp
 				}
 			}
 
-			byte[] ret = new byte[result.Count];
+			var ret = new byte[result.Count];
 			for (int i = 0; i < ret.Length; i++) {
 				ret [i] = result [i];
 			}
@@ -68,9 +64,9 @@ namespace LeagueRTMPSSharp
 			return ret;
 		}
 
-		public byte[] EncodeConnect (Dictionary<String, Object> parameters)
+		public byte[] EncodeConnect (Dictionary<string, object> parameters)
 		{
-			var result = new List<Byte> ();
+			var result = new List<byte> ();
 
 			WriteStringAMF0 (result, "connect");
 			WriteIntAMF0 (result, 1); // invokeId
@@ -87,7 +83,7 @@ namespace LeagueRTMPSSharp
 			WriteStringAMF0 (result, ""); // ""
 
 			// Set up CommandMessage
-			TypedObject cm = new TypedObject ("flex.messaging.messages.CommandMessage");
+			var cm = new TypedObject ("flex.messaging.messages.CommandMessage");
 			cm.Add ("messageRefType", null);
 			cm.Add ("operation", 5);
 			cm.Add ("correlationId", "");
@@ -107,7 +103,7 @@ namespace LeagueRTMPSSharp
 			result.Add ((byte)0x11); // AMF3 object
 			encode (result, cm);
 
-			byte[] ret = new byte[result.Count];
+			var ret = new byte[result.Count];
 			for (int i = 0; i < ret.Length; i++) {
 				ret [i] = result [i];
 			}
@@ -120,31 +116,31 @@ namespace LeagueRTMPSSharp
 
 		public byte[] EncodeInvoke (int id, object data)
 		{
-			List<Byte> result = new List<Byte> ();
+			var result = new List<byte> ();
 
 			result.Add ((byte)0x00); // version
 			result.Add ((byte)0x05); // type?
 			WriteIntAMF0 (result, id); // invoke ID
 			result.Add ((byte)0x05); // ???
-
 			result.Add ((byte)0x11); // AMF3 object
 			encode (result, data);
 
-			byte[] ret = new byte[result.Count];
-			for (int i = 0; i < ret.Length; i++)
+			var ret = new byte[result.Count];
+			for (int i = 0; i < ret.Length; i++) {
 				ret [i] = result [i];
+			}
 
 			ret = AddHeaders (ret);
 
 			return ret;
 		}
 
-		public byte[] encode (Object obj)
+		public byte[] encode (object obj)
 		{
 			throw new NotImplementedException ();
 		}
 
-		public void encode (List<Byte> ret, Object obj)
+		public void encode (List<byte> ret, object obj)
 		{
 			if (obj == null) {
 				ret.Add ((byte)0x01);
@@ -188,19 +184,21 @@ namespace LeagueRTMPSSharp
 			}
 		}
 
-		private void WriteObject (List<Byte> ret, TypedObject val)
+		private void WriteObject (List<byte> ret, TypedObject val)
 		{
 			if (val.Type == null || val.Type.Equals ("")) {
 				ret.Add ((byte)0x0B); // Dynamic class
-
 				ret.Add ((byte)0x01); // No class name
-				foreach (String key in val.Keys) {
+
+				foreach (var key in val.Keys) {
 					WriteString (ret, key);
 					encode (ret, val [key]);
 				}
+
 				ret.Add ((byte)0x01); // End of dynamic
 			} else if (val.Type.Equals ("flex.messaging.io.ArrayCollection")) {
 				ret.Add ((byte)0x07); // Externalizable
+
 				WriteString (ret, val.Type);
 
 				encode (ret, val ["array"]);
@@ -208,46 +206,42 @@ namespace LeagueRTMPSSharp
 				WriteInt (ret, (val.Count << 4) | 3); // Inline + member count
 				WriteString (ret, val.Type);
 
-				List<String> keyOrder = new List<String> ();
-				foreach (String key in val.Keys) {
+				var keyOrder = new List<string> ();
+				foreach (var key in val.Keys) {
 					WriteString (ret, key);
 					keyOrder.Add (key);
 				}
 
-				foreach (String key in keyOrder)
+				foreach (var key in keyOrder) {
 					encode (ret, val [key]);
+				}
 			}
 		}
 
-		private void WriteDate (List<Byte> ret, DateTime val)
+		private void WriteDate (List<byte> ret, DateTime val)
 		{
 			throw new NotImplementedException ();
 		}
 
-		private void WriteByteArray (List<Byte> ret, byte[] val)
+		private void WriteByteArray (List<byte> ret, byte[] val)
 		{
 			throw new NotImplementedException ();
 		}
 
-		private void WriteArray (List<Byte> ret, Object[] val)
+		private void WriteArray (List<byte> ret, object[] val)
 		{
 			WriteInt (ret, (val.Length << 1) | 1);
+
 			ret.Add ((byte)0x01);
+
 			foreach (var obj in val) {
 				encode (ret, obj);
 			}
 		}
 
-		private void WriteStringAMF0 (List<Byte> ret, String val)
+		private void WriteStringAMF0 (List<byte> ret, string val)
 		{
-			byte[] temp = null;
-
-			try {
-				temp = System.Text.Encoding.UTF8.GetBytes (val);
-			} catch (Exception e) {
-				Console.WriteLine (e);
-				throw new Exception ("Unable to encode string as UTF-8: " + val);
-			}
+			var temp = Encoding.UTF8.GetBytes (val);
 
 			ret.Add ((byte)0x02);
 			ret.Add ((byte)((temp.Length & 0xFF00) >> 8));
@@ -258,7 +252,7 @@ namespace LeagueRTMPSSharp
 			}
 		}
 
-		private void WriteIntAMF0 (List<Byte> ret, int val)
+		private void WriteIntAMF0 (List<byte> ret, int val)
 		{
 			ret.Add ((byte)0x00);
 
@@ -270,7 +264,7 @@ namespace LeagueRTMPSSharp
 			}
 		}
 
-		private void WriteInt (List<Byte> ret, int val)
+		private void WriteInt (List<byte> ret, int val)
 		{
 			if (val < 0 || val >= 0x200000) {
 				ret.Add ((byte)(((val >> 22) & 0x7f) | 0x80));
@@ -282,14 +276,13 @@ namespace LeagueRTMPSSharp
 					ret.Add ((byte)(((val >> 14) & 0x7f) | 0x80));
 				}
 				if (val >= 0x80) { // 128
-					var val3 = String.Format ("{0:X}", val); 
 					ret.Add ((byte)(((val >> 7) & 0x7f) | 0x80));
 				}
 				ret.Add ((byte)(val & 0x7f));
 			}
 		}
 
-		private void WriteDouble (List<Byte> ret, double val)
+		private void WriteDouble (List<byte> ret, double val)
 		{
 			if (Double.IsNaN (val)) {
 				ret.Add ((byte)0x7F);
@@ -301,22 +294,16 @@ namespace LeagueRTMPSSharp
 				ret.Add ((byte)0x00);
 				ret.Add ((byte)0x00);
 			} else {
-				byte[] temp = BitConverter.GetBytes (val);
+				var temp = BitConverter.GetBytes (val);
 				foreach (byte b in temp) {
 					ret.Add (b);
 				}
 			}
 		}
 
-		private void WriteString (List<Byte> ret, String val)
+		private void WriteString (List<byte> ret, string val)
 		{
-			byte[] temp = null;
-			try {
-				temp = System.Text.Encoding.UTF8.GetBytes (val);
-			} catch (Exception e) {
-				Console.WriteLine (e);
-				throw new Exception ("Unable to encode string as UTF-8: " + val);
-			}
+			var temp = Encoding.UTF8.GetBytes (val);
 
 			WriteInt (ret, (temp.Length << 1) | 1);
 
@@ -325,25 +312,28 @@ namespace LeagueRTMPSSharp
 			}
 		}
 
-		private void WriteAssociativeArray (List<Byte> ret, Dictionary<String, Object> val)
+		private void WriteAssociativeArray (List<byte> ret, Dictionary<string, object> val)
 		{
 			ret.Add ((byte)0x01);
-			foreach (String key in val.Keys) {
+
+			foreach (var key in val.Keys) {
 				WriteString (ret, key);
 				encode (ret, val [key]);
 			}
+
 			ret.Add ((byte)0x01);
 		}
 
-		public static String RandomUID ()
+		public static string RandomUID ()
 		{
-			byte[] bytes = new byte[16];
+			var bytes = new byte[16];
 			rand.NextBytes (bytes);
 
-			StringBuilder ret = new StringBuilder ();
+			var ret = new StringBuilder ();
 			for (int i = 0; i < bytes.Length; i++) {
-				if (i == 4 || i == 6 || i == 8 || i == 10)
+				if (i == 4 || i == 6 || i == 8 || i == 10) {
 					ret.Append ('-');
+				}
 				ret.Append (String.Format ("{0:X2}", bytes [i]));
 			}
 

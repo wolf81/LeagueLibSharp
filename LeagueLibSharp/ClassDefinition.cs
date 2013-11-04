@@ -27,7 +27,7 @@ namespace LeagueRTMPSSharp
 
 		public bool Dynamic { get; set; }
 
-		public List<String> Members = new List<String> ();
+		public List<string> Members = new List<string> ();
 
 		public ClassDefinition ()
 		{

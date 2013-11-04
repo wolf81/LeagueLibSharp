@@ -33,26 +33,26 @@ namespace LeagueRTMPSSharp
 			this.Type = type;
 		}
 
-		public TypedObject GetTO (String key)
+		public TypedObject GetTO (string key)
 		{
 			return (TypedObject)this [key];
 		}
 
-		public String GetString (String key)
+		public string GetString (string key)
 		{
-			return (String)this [key];
+			return (string)this [key];
 		}
 
-		public static TypedObject MakeArrayCollection (Object[] data)
+		public static TypedObject MakeArrayCollection (object[] data)
 		{
-			TypedObject ret = new TypedObject ("flex.messaging.io.ArrayCollection");
+			var ret = new TypedObject ("flex.messaging.io.ArrayCollection");
 			ret.Add ("array", data);
 			return ret;
 		}
 
-		public Int32? GetInt (String key)
+		public Int32? GetInt (string key)
 		{
-			object val = this [key];
+			var val = this [key];
 
 			if (val == null) {
 				return null;
@@ -69,7 +69,7 @@ namespace LeagueRTMPSSharp
 				return base.ToString ();
 			} else if (Type.Equals ("flex.messaging.io.ArrayCollection")) {
 				var sb = new StringBuilder ();
-				Object[] data = (Object[])this ["array"];
+				object[] data = (object[])this ["array"];
 
 				sb.Append ("ArrayCollection:[");
 				for (int i = 0; i < data.Length; i++) {

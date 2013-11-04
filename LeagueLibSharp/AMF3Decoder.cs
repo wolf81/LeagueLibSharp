@@ -23,15 +23,11 @@ namespace LeagueRTMPSSharp
 {
 	public class AMF3Decoder
 	{
-		private byte[] _dataBuffer = null;
 		private int _dataPos = 0;
-		private List<String> _stringReferences = new List<String> ();
-		private List<Object> _objectReferences = new List<Object> ();
+		private byte[] _dataBuffer = null;
+		private List<string> _stringReferences = new List<string> ();
+		private List<object> _objectReferences = new List<object> ();
 		private List<ClassDefinition> _classDefinitions = new List<ClassDefinition> ();
-
-		public AMF3Decoder ()
-		{
-		}
 
 		private void Reset ()
 		{
@@ -40,14 +36,14 @@ namespace LeagueRTMPSSharp
 			_classDefinitions.Clear ();
 		}
 
-		public TypedObject DecodeConnect (Byte[] data)
+		public TypedObject DecodeConnect (byte[] data)
 		{
 			Reset ();
 
 			_dataBuffer = data;
 			_dataPos = 0;
 
-			TypedObject result = new TypedObject ("Invoke");
+			var result = new TypedObject ("Invoke");
 			result.Add ("result", DecodeAMF0 ());
 			result.Add ("invokeId", DecodeAMF0 ());
 			result.Add ("serviceCall", DecodeAMF0 ());
@@ -61,14 +57,14 @@ namespace LeagueRTMPSSharp
 			return result;
 		}
 
-		public TypedObject DecodeInvoke (Byte[] data)
+		public TypedObject DecodeInvoke (byte[] data)
 		{
 			Reset ();
 
 			_dataBuffer = data;
 			_dataPos = 0;
 
-			TypedObject result = new TypedObject ("Invoke");
+			var result = new TypedObject ("Invoke");
 			if (_dataBuffer [0] == 0x00) {
 				_dataPos++;
 				result.Add ("version", 0x00);
@@ -79,7 +75,8 @@ namespace LeagueRTMPSSharp
 			result.Add ("data", DecodeAMF0 ());
 
 			if (_dataPos != _dataBuffer.Length) {
-				throw new Exception ("Did not consume entire buffer: " + _dataPos + " of " + _dataBuffer.Length);
+				var message = "Did not consume entire buffer: " + _dataPos + " of " + _dataBuffer.Length;
+				throw new Exception (message);
 			}
 
 			return result;
@@ -126,31 +123,21 @@ namespace LeagueRTMPSSharp
 			return (int)ReadDouble ();
 		}
 
-		private String ReadStringAMF0 ()
+		private string ReadStringAMF0 ()
 		{
 			int length = (ReadByteAsInt () << 8) + ReadByteAsInt ();
 			if (length == 0) {
 				return "";
 			}
 
-			byte[] data = ReadBytes (length);
-
-			// UTF-8 applicable?
-			String str;
-			try {
-				str = Encoding.UTF8.GetString (data);
-			} catch (Exception e) {
-				var message = String.Format ("Error parsing AMF0 string from " + data);
-				throw new Exception (message);
-			}
-
-			return str;
+			var data = ReadBytes (length);
+			return Encoding.UTF8.GetString (data);
 		}
 
 		private TypedObject ReadObjectAMF0 ()
 		{
-			TypedObject body = new TypedObject ("Body");
-			String key;
+			var body = new TypedObject ("Body");
+			string key;
 			while (!(key = ReadStringAMF0 ()).Equals ("")) {
 				byte b = ReadByte ();
 				if (b == 0x00) {
@@ -160,7 +147,8 @@ namespace LeagueRTMPSSharp
 				} else if (b == 0x05) {
 					body.Add (key, null);
 				} else {
-					throw new NotImplementedException ("AMF0 type not supported: " + b);
+					var message = "AMF0 type not supported: " + b;
+					throw new NotImplementedException (message);
 				}
 			}
 			ReadByte (); // Skip object end marker
@@ -199,25 +187,19 @@ namespace LeagueRTMPSSharp
 			return r;
 		}
 
-		private String ReadString ()
+		private string ReadString ()
 		{
-			int handle = ReadInt ();
-			bool inline = ((handle & 1) != 0);
+			var handle = ReadInt ();
+			var inline = ((handle & 1) != 0);
 			handle = handle >> 1;
 
 			if (inline) {
-				if (handle == 0)
+				if (handle == 0) {
 					return "";
-
-				byte[] data = ReadBytes (handle);
-
-				String str;
-				try {
-					str = Encoding.UTF8.GetString (data);
-				} catch (Exception e) {
-					var message = String.Format ("Error parsing AMF3 string from " + data);
-					throw new Exception (message);
 				}
+
+				var data = ReadBytes (handle);
+				var str = Encoding.UTF8.GetString (data);
 
 				_stringReferences.Add (str);
 
@@ -227,20 +209,20 @@ namespace LeagueRTMPSSharp
 			}
 		}
 
-		private String ReadXML ()
+		private string ReadXML ()
 		{
 			throw new NotImplementedException ("Reading of XML is not implemented");
 		}
 
 		private DateTime ReadDate ()
 		{
-			int handle = ReadInt ();
-			bool inline = ((handle & 1) != 0);
+			var handle = ReadInt ();
+			var inline = ((handle & 1) != 0);
 			handle = handle >> 1;
 
 			if (inline) {
-				long ms = (long)ReadDouble ();
-				DateTime d = new DateTime (ms);
+				var ms = (long)ReadDouble ();
+				var d = new DateTime (ms);
 
 				_objectReferences.Add (d);
 
@@ -250,32 +232,35 @@ namespace LeagueRTMPSSharp
 			}
 		}
 
-		private Object[] ReadArray ()
+		private object[] ReadArray ()
 		{
-			int handle = ReadInt ();
-			bool inline = ((handle & 0x1) != 0);
+			var handle = ReadInt ();
+			var inline = ((handle & 0x1) != 0);
 			handle = handle >> 1;
 
 			if (inline) {
-				String key = ReadString ();
-				if (key != null && !key.Equals (""))
+				var key = ReadString ();
+				if (key != null && !key.Equals ("")) {
 					throw new NotImplementedException ("Associative arrays are not supported");
+				}
+				var ret = new object[handle];
 
-				Object[] ret = new Object[handle];
 				_objectReferences.Add (ret);
 
-				for (int i = 0; i < handle; i++)
+				for (int i = 0; i < handle; i++) {
 					ret [i] = Decode ();
+				}
 
 				return ret;
 			} else {
-				return (Object[])_objectReferences [handle];
+				return (object[])_objectReferences [handle];
 			}
 		}
-
+		// TODO: figure out if we really need to enforce `Int32` type here or
+		//	can safely use the `int` alias
 		private List<Int32> ReadFlags ()
 		{
-			List<Int32> flags = new List<Int32> ();
+			var flags = new List<Int32> ();
 			int flag;
 			do {
 				flag = ReadByteAsInt ();
@@ -287,20 +272,22 @@ namespace LeagueRTMPSSharp
 
 		private byte[] ReadByteArray ()
 		{
-			int handle = ReadInt ();
-			bool inline = ((handle & 0x1) != 0);
+			var handle = ReadInt ();
+			var inline = ((handle & 0x1) != 0);
 			handle = handle >> 1;
 
 			if (inline) {
-				byte[] ret = ReadBytes (handle);
+				var ret = ReadBytes (handle);
+
 				_objectReferences.Add (ret);
+
 				return ret;
 			} else {
 				return (byte[])_objectReferences [handle];
 			}
 		}
 
-		private String ReadXMLString ()
+		private string ReadXMLString ()
 		{
 			throw new NotImplementedException ("Reading of XML strings is not implemented");
 		}
@@ -311,15 +298,16 @@ namespace LeagueRTMPSSharp
 			// preserve the integrity of the input stream...
 			if ((flag >> bits) != 0) {
 				for (int o = bits; o < 6; o++) {
-					if (((flag >> o) & 1) != 0)
+					if (((flag >> o) & 1) != 0) {
 						Decode ();
+					}
 				}
 			}
 		}
 
-		private String ByteArrayToID (byte[] data)
+		private string ByteArrayToID (byte[] data)
 		{
-			StringBuilder ret = new StringBuilder ();
+			var ret = new StringBuilder ();
 			for (int i = 0; i < data.Length; i++) {
 				if (i == 4 || i == 6 || i == 8 || i == 10) {
 					ret.Append ("-");
@@ -332,13 +320,13 @@ namespace LeagueRTMPSSharp
 
 		private TypedObject ReadDSA ()
 		{
-			TypedObject ret = new TypedObject ("DSA");
+			var ret = new TypedObject ("DSA");
 
 			int flag;
-			List<Int32> flags = ReadFlags ();
+			var flags = ReadFlags ();
 			for (int i = 0; i < flags.Count; i++) {
 				flag = flags [i];
-				int bits = 0;
+				var bits = 0;
 				if (i == 0) {
 					if ((flag & 0x01) != 0)
 						ret.Add ("body", Decode ());
@@ -358,13 +346,13 @@ namespace LeagueRTMPSSharp
 				} else if (i == 1) {
 					if ((flag & 0x01) != 0) {
 						ReadByte ();
-						byte[] temp = ReadByteArray ();
+						var temp = ReadByteArray ();
 						ret.Add ("clientIdBytes", temp);
 						ret.Add ("clientId", ByteArrayToID (temp));
 					}
 					if ((flag & 0x02) != 0) {
 						ReadByte ();
-						byte[] temp = ReadByteArray ();
+						var temp = ReadByteArray ();
 						ret.Add ("messageIdBytes", temp);
 						ret.Add ("messageId", ByteArrayToID (temp));
 					}
@@ -377,14 +365,14 @@ namespace LeagueRTMPSSharp
 			flags = ReadFlags ();
 			for (int i = 0; i < flags.Count; i++) {
 				flag = flags [i];
-				int bits = 0;
+				var bits = 0;
 
 				if (i == 0) {
 					if ((flag & 0x01) != 0)
 						ret.Add ("correlationId", Decode ());
 					if ((flag & 0x02) != 0) {
 						ReadByte ();
-						byte[] temp = ReadByteArray ();
+						var temp = ReadByteArray ();
 						ret.Add ("correlationIdBytes", temp);
 						ret.Add ("correlationId", ByteArrayToID (temp));
 					}
@@ -400,10 +388,10 @@ namespace LeagueRTMPSSharp
 		private TypedObject ReadDSK ()
 		{
 			// DSK is just a DSA + extra set of flags/objects
-			TypedObject ret = ReadDSA ();
+			var ret = ReadDSA ();
 			ret.Type = "DSK";
 
-			List<Int32> flags = ReadFlags ();
+			var flags = ReadFlags ();
 			for (int i = 0; i < flags.Count; i++) {
 				ReadRemaining (flags [i], 0);
 			}
@@ -411,14 +399,14 @@ namespace LeagueRTMPSSharp
 			return ret;
 		}
 
-		private Object ReadObject ()
+		private object ReadObject ()
 		{
-			int handle = ReadInt ();
-			bool inline = ((handle & 1) != 0);
+			var handle = ReadInt ();
+			var inline = ((handle & 1) != 0);
 			handle = handle >> 1;
 
 			if (inline) {
-				bool inlineDefine = ((handle & 1) != 0);
+				var inlineDefine = ((handle & 1) != 0);
 				handle = handle >> 1;
 
 				ClassDefinition cd;
@@ -431,62 +419,53 @@ namespace LeagueRTMPSSharp
 					cd.Dynamic = ((handle & 1) != 0);
 					handle = handle >> 1;
 
-					for (int i = 0; i < handle; i++)
+					for (int i = 0; i < handle; i++) {
 						cd.Members.Add (ReadString ());
+					}
 
 					_classDefinitions.Add (cd);
 				} else {
 					cd = _classDefinitions [handle];
 				}
 
-				TypedObject ret = new TypedObject (cd.Type);
+				var ret = new TypedObject (cd.Type);
 
 				// Need to add reference here due to circular references
 				_objectReferences.Add (ret);
 
 				if (cd.Externalizable) {
-					if (cd.Type.Equals ("DSK"))
+					if (cd.Type.Equals ("DSK")) {
 						ret = ReadDSK ();
-					else if (cd.Type.Equals ("DSA"))
+					} else if (cd.Type.Equals ("DSA")) {
 						ret = ReadDSA ();
-					else if (cd.Type.Equals ("flex.messaging.io.ArrayCollection")) {
-						Object obj = Decode ();
+					} else if (cd.Type.Equals ("flex.messaging.io.ArrayCollection")) {
+						var obj = Decode ();
 						ret = TypedObject.MakeArrayCollection ((Object[])obj);
 					} else if (cd.Type.Equals ("com.riotgames.platform.systemstate.ClientSystemStatesNotification") ||
 					           cd.Type.Equals ("com.riotgames.platform.broadcast.BroadcastNotification")) {
-						int size = 0;
+						var size = 0;
 						for (int i = 0; i < 4; i++) {
 							size = size * 256 + ReadByteAsInt ();
 						}
 
-						String json;
-						try {
-							json = Encoding.UTF8.GetString (ReadBytes (size));
-						} catch (NotSupportedException e) {
-							throw new NotSupportedException (e.ToString ());
-						}
-
+						var json = Encoding.UTF8.GetString (ReadBytes (size));
 						ret = (TypedObject)JsonConvert.DeserializeObject (json);
 						ret.Type = cd.Type;
 					} else {
-						for (int i = _dataPos; i < _dataBuffer.Length; i++)
-							Console.WriteLine (String.Format ("{0:X2}", _dataBuffer [i]));
-						Console.WriteLine ();
-
-						var message = String.Format ("Externalizable not handled for {0}", cd.Type);
+						var message = "Externalizable not handled for " + cd.Type;
 						throw new Exception (message);
 					}
 				} else {
 					for (int i = 0; i < cd.Members.Count; i++) {
-						String key = cd.Members [i];
-						Object value = Decode ();
+						var key = cd.Members [i];
+						var value = Decode ();
 						ret.Add (key, value);
 					}
 
 					if (cd.Dynamic) {
-						String key;
+						string key;
 						while ((key = ReadString ()).Length != 0) {
-							Object value = Decode ();
+							var value = Decode ();
 							ret.Add (key, value);
 						}
 					}
@@ -498,55 +477,43 @@ namespace LeagueRTMPSSharp
 			}
 		}
 
-		private Object Decode ()
+		private object Decode ()
 		{
 			byte type = ReadByte ();
 			switch (type) {
 			case 0x00:
 				throw new Exception ("Undefined data type");
-
 			case 0x01:
 				return null;
-
 			case 0x02:
 				return false;
-
 			case 0x03:
 				return true;
-
 			case 0x04:
 				return ReadInt ();
-
 			case 0x05:
 				return ReadDouble ();
-
 			case 0x06:
 				return ReadString ();
-
 			case 0x07:
 				return ReadXML ();
-
 			case 0x08:
 				return ReadDate ();
-
 			case 0x09:
 				return ReadArray ();
-
 			case 0x0A:
 				return ReadObject ();
-
 			case 0x0B:
 				return ReadXMLString ();
-
 			case 0x0C:
 				return ReadByteArray ();
 			}
 
-			var message = String.Format ("Unexpected AMF3 data type: " + type);
+			var message = "Unexpected AMF3 data type: " + type;
 			throw new Exception (message);
 		}
 
-		private Object DecodeAMF0 ()
+		private object DecodeAMF0 ()
 		{
 			int type = ReadByte ();
 
