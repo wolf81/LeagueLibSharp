@@ -1,6 +1,8 @@
 LeagueLibSharp
 ==============
 
+**PLEASE NOTE**: [SINCE RIOT HAS RELEASED AN OFFICIAL API][3], THIS PROJECT IS PUT ON HOLD.
+
 A C# port of the Java project [LoLRTMPSClient][0] with some additional functionality. 
 
 The eventual goal is to create a library that could be used to power a website with similar functionality as [LolKing][1] & [LolNexus][2]. A lesser priority would be to get the library running on iOS / Android using Xamarin.
@@ -10,6 +12,7 @@ Be warned: the code is still very much a work-in-progress and contains much debu
 [0]: http://code.google.com/p/lolrtmpsclient/
 [1]: http://www.lolking.net
 [2]: http://www.lolnexus.com
+[3]: http://developer.riotgames.com/docs/getting-started
 
 TODO
 ----
